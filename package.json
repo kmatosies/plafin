@@ -1,0 +1,13 @@
+{
+    "name": "saas-finance-agenda",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Plafin — SaaS Finance & Agenda",
+    "scripts": {
+        "dev": "cd frontend && npm run dev",
+        "build": "cd frontend && npm run build",
+        "lint": "cd frontend && npm run lint",
+        "preview": "cd frontend && npm run preview",
+        "install:frontend": "cd frontend && npm install"
+    }
+}
