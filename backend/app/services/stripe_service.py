@@ -6,6 +6,7 @@ Gerencia sessões de checkout, assinaturas e webhooks.
 import stripe
 from app.config import get_settings
 from app.database import get_supabase_admin
+from app.config.plans import PLAN_PRO, PLAN_STARTER, normalize_plan
 
 
 def _init_stripe():
@@ -29,22 +30,26 @@ def create_checkout_session(
 
     # Definir o price_id baseado no plano e ciclo de cobrança
     # Por enquanto: somente mensal. Semiannual e annual ficam para versão futura.
+    normalized_plan = normalize_plan(plan)
+    if normalized_plan == "free":
+        raise ValueError("Plano 'free' não pode ser contratado via checkout.")
+
     price_map = {
-        "starter": {
+        PLAN_STARTER: {
             "monthly": settings.stripe_price_starter_monthly,
         },
-        "pro": {
+        PLAN_PRO: {
             "monthly": settings.stripe_price_pro_monthly,
         },
     }
 
-    plan_prices = price_map.get(plan)
+    plan_prices = price_map.get(normalized_plan)
     if not plan_prices:
-        raise ValueError(f"Plano '{plan}' inválido. Use 'starter' ou 'pro'.")
+        raise ValueError(f"Plano '{plan}' inválido. Use 'pro'.")
 
     price_id = plan_prices.get(billing_cycle)
     if not price_id:
-        raise ValueError(f"Ciclo '{billing_cycle}' inválido para o plano '{plan}'.") 
+        raise ValueError(f"Ciclo '{billing_cycle}' inválido para o plano '{normalized_plan}'.")
 
     # Verificar/criar customer no Stripe
     supabase = get_supabase_admin()
@@ -77,10 +82,10 @@ def create_checkout_session(
         line_items=[{"price": price_id, "quantity": 1}],
         mode="subscription",
         success_url=f"{settings.frontend_url}/dashboard?checkout=success",
-        cancel_url=f"{settings.frontend_url}/pricing?checkout=cancelled",
+        cancel_url=f"{settings.frontend_url}/assinatura?checkout=cancelled",
         metadata={
             "user_id": user_id,
-            "plan": plan,
+            "plan": normalized_plan,
             "billing_cycle": billing_cycle,
         },
     )
@@ -138,7 +143,7 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> dict:
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session["metadata"]["user_id"]
-        plan = session["metadata"]["plan"]
+        plan = normalize_plan(session["metadata"]["plan"])
         subscription_id = session.get("subscription")
 
         # Buscar detalhes da assinatura para obter data de expiração

@@ -1,18 +1,23 @@
 """
 Schemas Pydantic para clientes/contatos do usuário.
+Normaliza "name" no backend para "full_name" no frontend.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 
 
 class ClientBase(BaseModel):
     """Campos base de um cliente."""
-    name: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    full_name: str = Field(validation_alias="name", serialization_alias="full_name")
     phone: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = "ativo"
 
 
 class ClientCreate(ClientBase):
@@ -22,10 +27,14 @@ class ClientCreate(ClientBase):
 
 class ClientUpdate(BaseModel):
     """Campos atualizáveis de um cliente."""
-    name: Optional[str] = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    full_name: Optional[str] = Field(default=None, validation_alias="name", serialization_alias="full_name")
     phone: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
     archived: Optional[bool] = None
 
 

@@ -6,10 +6,11 @@ Endpoints para análise financeira e automação WhatsApp.
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Literal, Optional
-from app.middleware.auth import get_current_user, require_plan
+from app.middleware.auth import get_current_user
 from app.services.ai_finance_agent import finance_agent
 from app.services.ai_whatsapp_agent import whatsapp_agent
 from app.database import get_supabase_admin
+from app.config.plans import normalize_plan, has_feature
 
 router = APIRouter(prefix="/ai", tags=["Inteligência Artificial"])
 
@@ -52,7 +53,7 @@ async def financial_analysis(
         .execute()
     )
 
-    plan = profile.data.get("plan", "free") if profile.data else "free"
+    plan = normalize_plan(profile.data.get("plan", "free")) if profile.data else "free"
     if plan == "free":
         raise HTTPException(
             status_code=403,
@@ -97,7 +98,7 @@ async def financial_chat(
         .execute()
     )
 
-    plan = profile.data.get("plan", "free") if profile.data else "free"
+    plan = normalize_plan(profile.data.get("plan", "free")) if profile.data else "free"
     if plan == "free":
         raise HTTPException(
             status_code=403,
@@ -143,7 +144,7 @@ async def get_finance_history(
     return {"history": result.data or []}
 
 
-# --- Agente WhatsApp (requer plano Enterprise) ---
+# --- Agente WhatsApp (requer feature no plano atual) ---
 
 @router.post("/whatsapp/webhook")
 async def whatsapp_webhook(payload: WhatsAppWebhookPayload):
@@ -181,7 +182,8 @@ async def whatsapp_webhook(payload: WhatsAppWebhookPayload):
             .execute()
         )
 
-        if not profile.data or profile.data.get("plan") != "enterprise":
+        plan = normalize_plan(profile.data.get("plan")) if profile.data else "free"
+        if not has_feature(plan, "whatsapp_agent"):
             return {"status": "ignored", "reason": "Plano não suporta WhatsApp"}
 
         # Processar mensagem com IA
@@ -206,7 +208,7 @@ async def send_reminders(
 ):
     """
     Envia lembretes de agendamento para clientes via WhatsApp.
-    Requer plano Enterprise.
+    Requer plano com acesso ao agente WhatsApp.
     """
     supabase = get_supabase_admin()
     profile = (
@@ -217,10 +219,11 @@ async def send_reminders(
         .execute()
     )
 
-    if not profile.data or profile.data.get("plan") != "enterprise":
+    plan = normalize_plan(profile.data.get("plan")) if profile.data else "free"
+    if not has_feature(plan, "whatsapp_agent"):
         raise HTTPException(
             status_code=403,
-            detail="Este recurso requer o plano Enterprise.",
+            detail="Este recurso requer o plano Pro.",
         )
 
     try:

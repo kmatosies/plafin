@@ -1,11 +1,14 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Filter, Bot, CalendarDays, CalendarRange } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Filter, Bot, CalendarDays, CalendarRange, Loader2 } from 'lucide-react'
+import { appointmentsApi, clientsApi } from '../lib/api'
+import type { Appointment, Client } from '../lib/api'
 
 const DAYS_HEADER = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
-type EventStatus = 'confirmado' | 'pendente'
+type EventStatus = 'confirmado' | 'pendente' | 'cancelado'
 interface DayEvent {
+    id: string;
     timeStart: string; timeEnd: string;
     name: string; subtitle: string;
     value?: string; status: EventStatus;
@@ -13,35 +16,18 @@ interface DayEvent {
     teamAvatars?: string[];
 }
 
-const scheduleData: Record<string, DayEvent[]> = {
-    '2025-01-21': [
-        { timeStart: '09:00', timeEnd: '10:00', name: 'João Pereira', subtitle: 'Consultoria Financeira', value: 'R$ 200', status: 'confirmado', avatarBg: '#c7d2fe', initials: 'JP' },
-        { timeStart: '11:30', timeEnd: '12:15', name: 'Ana Oliveira', subtitle: 'Reunião de Estratégia', status: 'pendente', avatarBg: '#fde68a', initials: 'AO' },
-        { timeStart: '14:30', timeEnd: '15:30', name: 'Maria Souza', subtitle: 'Revisão de Impostos', value: 'R$ 150', status: 'pendente', avatarBg: '#bbf7d0', initials: 'MS' },
-        { timeStart: '16:00', timeEnd: '17:00', name: 'Equipe Plafin', subtitle: 'Brainstorming', status: 'confirmado', teamAvatars: ['#c7d2fe', '#fde68a', '#bbf7d0'] },
-    ],
-    '2025-01-06': [
-        { timeStart: '10:00', timeEnd: '11:00', name: 'Carlos Mendes', subtitle: 'Análise de Portfólio', value: 'R$ 300', status: 'confirmado', avatarBg: '#ddd6fe', initials: 'CM' },
-    ],
-    '2025-01-13': [
-        { timeStart: '09:00', timeEnd: '10:30', name: 'Laura Freitas', subtitle: 'Planejamento Tributário', value: 'R$ 350', status: 'pendente', avatarBg: '#fef08a', initials: 'LF' },
-    ],
-}
-
-const eventDots: Record<string, string[]> = {
-    '2025-01-06': ['#3B82F6', '#10B981'],
-    '2025-01-07': ['var(--brand-navy)'],
-    '2025-01-08': ['#10B981'],
-    '2025-01-13': ['#F59E0B'],
-    '2025-01-14': ['#3B82F6'],
-    '2025-01-15': ['#3B82F6', 'var(--brand-navy)'],
-    '2025-01-21': ['var(--brand-navy)'],
-    '2025-01-22': ['#3B82F6'],
-    '2025-01-28': ['#10B981'],
-}
-
 function getDaysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate() }
 function getFirstDay(y: number, m: number) { return new Date(y, m, 1).getDay() }
+
+// Helpers para cor de status
+const getStatusColor = (status: EventStatus) => {
+    switch (status) {
+        case 'confirmado': return 'var(--brand-green)'
+        case 'pendente': return '#F59E0B'
+        case 'cancelado': return 'var(--text-3)'
+        default: return 'var(--brand-navy)'
+    }
+}
 
 /* ─── Picker de Mês/Ano em dropdown ─────────────────────────────────── */
 function MonthYearPicker({ cur, onChange, onClose }: {
@@ -87,7 +73,45 @@ const navBtnStyle: React.CSSProperties = {
 }
 
 /* ─── Modal de Novo Evento ───────────────────────────────────────────── */
-function EventModal({ onClose }: { onClose: () => void }) {
+function EventModal({ onClose, onSuccess, clients }: { onClose: () => void, onSuccess: () => void, clients: Client[] }) {
+    // Como os endpoints pedem clientId, apenas um form visual por enquanto ou adaptar depois:
+    const [loading, setLoading] = useState(false)
+    const [formData, setFormData] = useState({
+        title: '', date: '', start_time: '', end_time: '', status: 'confirmado' as EventStatus, client_id: ''
+    })
+    useEffect(() => {
+        if (!formData.client_id && clients.length > 0) {
+            setFormData(prev => ({ ...prev, client_id: clients[0].id }))
+        }
+    }, [clients, formData.client_id])
+
+    const handleCreate = async () => {
+        // Exemplo simplificado (você pode melhorar para buscar clients do BD)
+        if (!formData.title || !formData.date || !formData.start_time || !formData.end_time || !formData.client_id) return
+        setLoading(true)
+        try {
+            // Nota: Para criar compromisso real, precisamos de um client_id válido.
+            // Para efeitos de UX, simularemos se não houver backend validando chave-estrangeira.
+            // Opcional: Se a API falhar sem client_id, teremos que tratar.
+            await appointmentsApi.create({
+                client_id: formData.client_id,
+                date: formData.date,
+                start_time: formData.start_time,
+                end_time: formData.end_time,
+                status: formData.status,
+                title: formData.title,
+                notes: formData.title,
+            })
+            onSuccess()
+            onClose()
+        } catch (error) {
+            console.error(error)
+            alert('Não foi possível criar o evento. Certifique-se que o banco de dados tem clientes válidos.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     return (
         <div style={{
             position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)',
@@ -112,13 +136,13 @@ function EventModal({ onClose }: { onClose: () => void }) {
                 <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div>
                         <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Título do Evento *</label>
-                        <input type="text" placeholder="Ex: Reunião de Alinhamento" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                        <input type="text" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} placeholder="Ex: Reunião de Alinhamento" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div>
                             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Data *</label>
-                            <input type="date" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                            <input type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
                         </div>
                         <div>
                             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tipo</label>
@@ -133,11 +157,11 @@ function EventModal({ onClose }: { onClose: () => void }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div>
                             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Início</label>
-                            <input type="time" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                            <input type="time" value={formData.start_time} onChange={e => setFormData({ ...formData, start_time: e.target.value })} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
                         </div>
                         <div>
                             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Término</label>
-                            <input type="time" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                            <input type="time" value={formData.end_time} onChange={e => setFormData({ ...formData, end_time: e.target.value })} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
                         </div>
                     </div>
 
@@ -148,11 +172,11 @@ function EventModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div style={{ padding: '16px 24px', background: 'var(--hover)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                    <button className="btn btn-outline" onClick={onClose}>
+                    <button className="btn btn-outline" onClick={onClose} disabled={loading}>
                         Cancelar
                     </button>
-                    <button className="btn btn-primary" onClick={onClose}>
-                        Criar Evento
+                    <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
+                        {loading ? <Loader2 size={16} className="spin" /> : 'Criar Evento'}
                     </button>
                 </div>
             </div>
@@ -161,11 +185,40 @@ function EventModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function Agenda() {
-    const [cur, setCur] = useState({ y: 2025, m: 0 })
-    const [selected, setSelected] = useState(21)
+    const today = new Date()
+    const [cur, setCur] = useState({ y: today.getFullYear(), m: today.getMonth() })
+    const [selected, setSelected] = useState(today.getDate())
     const [pickerOpen, setPickerOpen] = useState(false)
     const [showEventModal, setShowEventModal] = useState(false)
     const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
+
+    // Server data state
+    const [appointments, setAppointments] = useState<Appointment[]>([])
+    const [clients, setClients] = useState<Client[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    const fetchAppointments = useCallback(async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const data = await appointmentsApi.list(cur.m + 1, cur.y)
+            setAppointments(data)
+        } catch (error) {
+            console.error('Failed to fetch appointments:', error)
+            setError('Nao foi possivel carregar a agenda. Tente novamente.')
+        } finally {
+            setLoading(false)
+        }
+    }, [cur])
+
+    useEffect(() => {
+        fetchAppointments()
+    }, [fetchAppointments])
+
+    useEffect(() => {
+        clientsApi.list().then(setClients).catch(() => setClients([]))
+    }, [])
 
     const daysInMonth = getDaysInMonth(cur.y, cur.m)
     const firstDay = getFirstDay(cur.y, cur.m)
@@ -192,6 +245,32 @@ export default function Agenda() {
             cells.push({ day: dia.getDate(), cur: dia.getMonth() === cur.m })
         }
     }
+
+    // Processar os appointments em um map para exibição
+    const scheduleData: Record<string, DayEvent[]> = {}
+    const eventDots: Record<string, string[]> = {}
+
+    appointments.forEach(app => {
+        // App date needs to match "YYYY-MM-DD"
+        // Safely extract the date part only in case it's a full DateTime
+        const dateKey = app.date.split('T')[0]
+
+        if (!scheduleData[dateKey]) scheduleData[dateKey] = []
+        scheduleData[dateKey].push({
+            id: app.id,
+            timeStart: app.start_time.slice(0, 5), // 'HH:MM'
+            timeEnd: app.end_time.slice(0, 5),
+            name: app.client_name || 'Cliente Oculto',
+            subtitle: app.notes || 'Consulta',
+            status: app.status as EventStatus,
+            value: app.value ? `R$ ${app.value}` : undefined,
+            initials: app.client_name ? app.client_name.substring(0, 2).toUpperCase() : 'C',
+            avatarBg: getStatusColor(app.status as EventStatus),
+        })
+
+        if (!eventDots[dateKey]) eventDots[dateKey] = []
+        eventDots[dateKey].push(getStatusColor(app.status as EventStatus))
+    })
 
     const selectedKey = `${cur.y}-${String(cur.m + 1).padStart(2, '0')}-${String(selected).padStart(2, '0')}`
     const dayEvents = scheduleData[selectedKey] || []
@@ -233,16 +312,17 @@ export default function Agenda() {
                     {/* Navegação mês/ano */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, position: 'relative' }}>
                         {/* Título clicável */}
-                        <button
-                            onClick={() => setPickerOpen(o => !o)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'inherit' }}
-                        >
-                            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
-                                {MONTHS[cur.m]} {cur.y}
-                            </h2>
-                            {pickerOpen ? <ChevronUp size={16} color="var(--brand-navy)" /> : <ChevronDown size={16} color="var(--brand-navy)" />}
-                        </button>
-
+                        {loading ? <Loader2 size={16} className="spin" color="var(--brand-navy)" /> : (
+                            <button
+                                onClick={() => setPickerOpen(o => !o)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'inherit' }}
+                            >
+                                <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
+                                    {MONTHS[cur.m]} {cur.y}
+                                </h2>
+                                {pickerOpen ? <ChevronUp size={16} color="var(--brand-navy)" /> : <ChevronDown size={16} color="var(--brand-navy)" />}
+                            </button>
+                        )}
                         {/* Picker dropdown */}
                         {pickerOpen && (
                             <>
@@ -316,6 +396,15 @@ export default function Agenda() {
                             )
                         })}
                     </div>
+
+                    {error && (
+                        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--danger-soft)', border: '1px solid #fecdd3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <span style={{ fontSize: 12, color: 'var(--danger)' }}>{error}</span>
+                            <button className="btn btn-outline" style={{ padding: '6px 10px', fontSize: 12 }} onClick={fetchAppointments}>
+                                Tentar novamente
+                            </button>
+                        </div>
+                    )}
 
                     {/* Legenda eventos */}
                     <div style={{ display: 'flex', gap: 14, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
@@ -406,7 +495,7 @@ export default function Agenda() {
             </div>
 
             {/* Modal Novo Evento */}
-            {showEventModal && <EventModal onClose={() => setShowEventModal(false)} />}
+            {showEventModal && <EventModal onClose={() => setShowEventModal(false)} onSuccess={fetchAppointments} clients={clients} />}
         </div>
     )
 }

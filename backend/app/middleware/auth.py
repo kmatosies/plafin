@@ -32,10 +32,10 @@ async def get_current_user(
             )
 
         user = user_response.user
+        # ✅ Token NÃO incluído no dict para evitar vazamento em logs
         return {
             "id": user.id,
             "email": user.email,
-            "token": token,
         }
 
     except HTTPException:
@@ -58,7 +58,7 @@ async def require_plan(required_plan: str):
     pois eles são mais granulares.
     """
     from app.database import get_supabase_admin
-    from app.config.plans import PLAN_HIERARCHY
+    from app.config.plans import PLAN_HIERARCHY, normalize_plan
 
     async def check_plan(
         current_user: dict = Depends(get_current_user),
@@ -78,7 +78,7 @@ async def require_plan(required_plan: str):
                 detail="Perfil não encontrado.",
             )
 
-        plan = result.data.get("plan", "free")
+        plan = normalize_plan(result.data.get("plan", "free"))
         sub_status = result.data.get("subscription_status", "active")
 
         # Assinatura cancelada = FREE efetivo

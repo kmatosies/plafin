@@ -18,6 +18,16 @@ from app.services.usage_service import UsageService
 router = APIRouter(prefix="/clients", tags=["Clientes"])
 
 
+def _serialize_client(row: dict) -> dict:
+    if not row:
+        return row
+    row["full_name"] = row.get("name", "")
+    row["status"] = "inativo" if row.get("archived") else "ativo"
+    row.setdefault("address", None)
+    row.setdefault("notes", None)
+    return row
+
+
 @router.get("/", response_model=list[ClientResponse])
 async def list_clients(
     archived: Optional[bool] = Query(False),
@@ -37,7 +47,7 @@ async def list_clients(
         query = query.ilike("name", f"%{search}%")
 
     result = query.order("name").execute()
-    return result.data or []
+    return [_serialize_client(item) for item in (result.data or [])]
 
 
 @router.get("/{client_id}", response_model=ClientResponse)
@@ -59,7 +69,7 @@ async def get_client(
     if not result.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    return result.data
+    return _serialize_client(result.data)
 
 
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
@@ -70,8 +80,11 @@ async def create_client(
 ):
     """Cria um novo cliente (com verificação de limite de plano)."""
     supabase = get_supabase_admin()
-    client_data = data.model_dump()
+    client_data = data.model_dump(by_alias=False)
+    client_data["name"] = client_data.pop("full_name")
     client_data["user_id"] = current_user["id"]
+    client_data["archived"] = client_data.pop("status", "ativo") == "inativo"
+    client_data.pop("address", None)
 
     result = supabase.table("clients").insert(client_data).execute()
 
@@ -81,7 +94,7 @@ async def create_client(
     # Incrementar contador atomicamente
     UsageService.increment_counter(current_user["id"], "clients_total", "all")
 
-    return result.data[0]
+    return _serialize_client(result.data[0])
 
 
 @router.put("/{client_id}", response_model=ClientResponse)
@@ -103,7 +116,12 @@ async def update_client(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    update_data = data.model_dump(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True, by_alias=False)
+    if "full_name" in update_data:
+        update_data["name"] = update_data.pop("full_name")
+    if "status" in update_data:
+        update_data["archived"] = update_data.pop("status") == "inativo"
+    update_data.pop("address", None)
     result = (
         supabase.table("clients")
         .update(update_data)
@@ -111,7 +129,7 @@ async def update_client(
         .execute()
     )
 
-    return result.data[0]
+    return _serialize_client(result.data[0])
 
 
 @router.patch("/{client_id}/archive")

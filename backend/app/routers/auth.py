@@ -3,7 +3,8 @@ Router de autenticação.
 Registro, login e reset de senha via Supabase Auth.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.schemas.user import (
     UserRegister,
     UserLogin,
@@ -13,6 +14,7 @@ from app.schemas.user import (
 )
 from app.database import get_supabase_client, get_supabase_admin
 from app.config import get_settings
+from app.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
@@ -73,8 +75,9 @@ async def register(data: UserRegister):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(data: UserLogin):
-    """Autentica o usuário e retorna token JWT."""
+@limiter.limit("5/minute")
+async def login(request: Request, data: UserLogin):
+    """Autentica o usuário e retorna token JWT (Max: 5 tentativas por min)."""
     try:
         supabase = get_supabase_client()
 
@@ -89,10 +92,15 @@ async def login(data: UserLogin):
                 detail="Email ou senha inválidos.",
             )
 
-        # Buscar perfil completo
-        admin = get_supabase_admin()
+        # Buscar perfil usando o access_token do usuário (sem precisar do admin/service_role key)
+        # O RLS do Supabase permite que o usuário leia o próprio perfil com seu token
+        settings = get_settings()
+        from supabase import create_client as _create_client
+        user_client = _create_client(settings.supabase_url, settings.supabase_key)
+        user_client.postgrest.auth(auth_response.session.access_token)
+
         profile = (
-            admin.table("profiles")
+            user_client.table("profiles")
             .select("*")
             .eq("id", auth_response.user.id)
             .single()
@@ -139,9 +147,64 @@ async def reset_password(data: PasswordReset):
 
 
 @router.post("/logout")
-async def logout():
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
-    Logout no lado do servidor.
-    Na prática, o frontend remove o token localmente.
+    Logout no servidor: invalida o token JWT no Supabase.
+    O frontend também deve remover o token do armazenamento local.
     """
-    return {"message": "Logout realizado com sucesso."}
+    try:
+        from app.database import get_supabase_client
+        supabase = get_supabase_client()
+        supabase.auth.sign_out()
+        return {"message": "Logout realizado com sucesso."}
+    except Exception:
+        # Mesmo em caso de erro, considerar logout bem-sucedido
+        return {"message": "Logout realizado com sucesso."}
+
+
+@router.post("/update-password")
+async def update_password(data: dict):
+    """
+    Redefine a senha do usuário usando o access_token de recuperação
+    enviado pelo Supabase via email (link de reset).
+    """
+    try:
+        access_token = data.get("access_token")
+        new_password = data.get("new_password")
+
+        if not access_token or not new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="access_token e new_password são obrigatórios.",
+            )
+        if len(new_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha deve ter no mínimo 8 caracteres.",
+            )
+
+        supabase = get_supabase_client()
+
+        # Usa o token de recuperação para criar uma sessão temporária
+        session_res = supabase.auth.set_session(access_token=access_token, refresh_token="")
+
+        if not session_res or not session_res.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido ou expirado. Solicite um novo link.",
+            )
+
+        # Atualiza a senha com a sessão ativa
+        supabase.auth.update_user({"password": new_password})
+
+        return {"message": "Senha redefinida com sucesso."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao redefinir senha: {str(e)}",
+        )

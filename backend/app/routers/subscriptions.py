@@ -1,9 +1,9 @@
 """
-Router de assinaturas (Stripe) — Versão 2.
-Suporta planos: starter | pro (mensal apenas por enquanto).
+Router de assinaturas (Stripe).
+Expõe o contrato usado pelo frontend para status, checkout e portal.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Literal
 from app.middleware.auth import get_current_user
@@ -12,20 +12,19 @@ from app.services.stripe_service import (
     create_portal_session,
     handle_webhook_event,
 )
-from app.config.plans import PLAN_HIERARCHY, PLAN_STARTER, PLAN_PRO
+from app.config.plans import PLAN_FREE, PLAN_PRO, PLAN_LIMITS, PLAN_FEATURES, normalize_plan
 
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
 
 
 class CheckoutRequest(BaseModel):
-    plan: Literal["starter", "pro"]
-    billing_cycle: Literal["monthly"] = "monthly"  # Somente mensal por enquanto
+    plan: Literal["pro"]
+    billing_cycle: Literal["monthly"] = "monthly"
 
 
 @router.get("/plans")
 async def list_plans():
     """Retorna a lista de planos disponíveis com limites e features."""
-    from app.config.plans import PLAN_LIMITS, PLAN_FEATURES, PLAN_FREE
     return {
         "plans": [
             {
@@ -34,13 +33,6 @@ async def list_plans():
                 "price_monthly": 0,
                 "limits": PLAN_LIMITS[PLAN_FREE],
                 "features": sorted(list(PLAN_FEATURES[PLAN_FREE])),
-            },
-            {
-                "id": PLAN_STARTER,
-                "name": "STARTER",
-                "price_monthly": None,  # Vindo do Stripe
-                "limits": PLAN_LIMITS[PLAN_STARTER],
-                "features": sorted(list(PLAN_FEATURES[PLAN_STARTER])),
             },
             {
                 "id": PLAN_PRO,
@@ -59,7 +51,6 @@ async def get_subscription_status(
 ):
     """Retorna o status atual da assinatura do usuário autenticado."""
     from app.database import get_supabase_admin
-    from app.config.plans import PLAN_LIMITS, PLAN_FEATURES
     from app.services.usage_service import UsageService
     from datetime import datetime
 
@@ -75,7 +66,7 @@ async def get_subscription_status(
     if not profile.data:
         raise HTTPException(status_code=404, detail="Perfil não encontrado.")
 
-    plan = profile.data.get("plan", "free")
+    plan = normalize_plan(profile.data.get("plan", PLAN_FREE))
     period = datetime.utcnow().strftime("%Y-%m")
 
     # Buscar contadores de uso
@@ -89,8 +80,8 @@ async def get_subscription_status(
         "subscription_status": profile.data.get("subscription_status", "active"),
         "subscription_expires_at": profile.data.get("subscription_expires_at"),
         "stripe_subscription_id": profile.data.get("stripe_subscription_id"),
-        "limits": PLAN_LIMITS.get(plan, PLAN_LIMITS["free"]),
-        "features": sorted(list(PLAN_FEATURES.get(plan, PLAN_FEATURES["free"]))),
+        "limits": PLAN_LIMITS.get(plan, PLAN_LIMITS[PLAN_FREE]),
+        "features": sorted(list(PLAN_FEATURES.get(plan, PLAN_FEATURES[PLAN_FREE]))),
         "usage": {
             "clients_total": clients_count,
             "transactions_month": transactions_count,
@@ -112,7 +103,7 @@ async def create_checkout(
             plan=data.plan,
             billing_cycle=data.billing_cycle,
         )
-        return {"checkout_url": url}
+        return {"checkout_url": url, "plan": data.plan, "billing_cycle": data.billing_cycle}
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
     LayoutDashboard, CalendarDays, DollarSign, Users,
-    Bot, CreditCard, Settings, LogOut,
+    CreditCard, LogOut,
     Search, Bell, Moon, Menu, X, Check,
 } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -15,6 +16,7 @@ const navItems = [
 ]
 
 export default function Layout() {
+    const { user, logout } = useAuth()
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     // Estados para Notificações e Busca
@@ -25,6 +27,8 @@ export default function Layout() {
     const notificationsRef = useRef<HTMLDivElement>(null)
     const searchRef = useRef<HTMLDivElement>(null)
     const navigate = useNavigate()
+    const initials = user?.full_name?.split(' ').slice(0, 2).map(part => part[0]).join('').toUpperCase() ?? 'US'
+    const planLabel = user?.plan?.toUpperCase() ?? 'FREE'
 
     // Mock de notificações
     const notifications = [
@@ -110,7 +114,7 @@ export default function Layout() {
 
                 {/* Rodapé sidebar — só botão Sair */}
                 <div className="sidebar-footer">
-                    <button className="sidebar-logout-btn">
+                    <button className="sidebar-logout-btn" onClick={() => void logout()}>
                         <LogOut size={16} />
                         <span>Sair</span>
                     </button>
@@ -216,10 +220,10 @@ export default function Layout() {
                         <div className="topbar-divider" />
                         <div className="topbar-user">
                             <div className="topbar-user-info">
-                                <p className="topbar-user-name">Alex Silva</p>
-                                <p className="topbar-user-role">PRO</p>
+                                <p className="topbar-user-name">{user?.full_name ?? 'Usuário'}</p>
+                                <p className="topbar-user-role">{planLabel}</p>
                             </div>
-                            <div className="topbar-avatar" aria-label="Avatar do usuário">AS</div>
+                            <div className="topbar-avatar" aria-label="Avatar do usuário">{initials}</div>
                         </div>
                     </div>
                 </header>
