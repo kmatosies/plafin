@@ -36,34 +36,32 @@ npm run dev
 
 ## Estado atual de integracoes
 
-- `Render`: configuracao inicial criada, ajustes finais pendentes
-- `Vercel`: configuracao inicial criada, ajustes finais pendentes
-- `Resend`: ainda nao configurado
+- Em evolucao, com foco em consolidar uma experiencia fluida entre frontend, backend e automacoes.
 
-## Fluxo recomendado no GitHub
+## O que e o Plafin
 
-- manter `main` estavel
-- criar branch por feature/correcao
-- abrir PR com descricao curta e checklist de teste
-- versionar alteracoes de schema/scripts junto com alteracoes da API
+O Plafin e uma plataforma para profissionais e pequenos negocios que precisam organizar agenda, clientes e financeiro em um unico lugar. A proposta e reduzir operacao manual e transformar dados do dia a dia em decisao rapida.
 
-## Processo combinado (obrigatorio)
+## Como o sistema funciona
 
-- toda implementacao/atualizacao deve:
-- atualizar este `README.md` com o que mudou
-- ser commitada e publicada no GitHub (`origin/main`)
+1. O usuario registra clientes, compromissos e movimentacoes financeiras.
+2. O dashboard consolida indicadores principais para acompanhamento diario.
+3. A camada de IA ajuda na leitura de fluxo de caixa e sugere acoes praticas.
+4. O modulo de assinaturas permite evoluir planos conforme o crescimento do negocio.
 
-## Seguranca de segredos
+## Para que serve
 
-- nunca commitar `.env` com valores reais
-- usar apenas placeholders em `*.env.example`
-- manter chaves de API apenas em variaveis de ambiente no provedor (Render, Vercel, etc.)
-- antes de cada push, rodar varredura por strings sensiveis (token, secret, api key, private key)
+- controlar entradas, saidas e visao financeira do negocio
+- centralizar a agenda de atendimentos e tarefas
+- manter base de clientes organizada com historico
+- apoiar decisoes com insights automatizados
 
-### Status de seguranca atual
+## Para quem foi pensado
 
-- varredura de arquivos versionados: sem chaves expostas em codigo/config versionado
-- risco identificado e tratado: token GitHub estava no email do Git local (config corrigida para `kmatosies@users.noreply.github.com`)
-- historico Git reescrito em 20/03/2026 para remover token exposto dos metadados de commits
-- politica de publicacao apos incidente: push com verificacao de segredos antes de enviar para `origin/main`
-- acao obrigatoria do mantenedor: revogar o token antigo no GitHub e gerar novo token, se ainda nao foi feito
+- autonomos e prestadores de servico
+- consultorios e operacoes com agenda recorrente
+- pequenas empresas que querem previsibilidade financeira
+
+## Proposta de valor
+
+Menos planilhas soltas, menos retrabalho e mais clareza sobre o que realmente move o faturamento. O Plafin foi desenhado para ser simples na operacao e estrategico no resultado.
