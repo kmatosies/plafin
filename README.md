@@ -64,3 +64,6 @@ npm run dev
 
 - varredura de arquivos versionados: sem chaves expostas em codigo/config versionado
 - risco identificado e tratado: token GitHub estava no email do Git local (config corrigida para `kmatosies@users.noreply.github.com`)
+- historico Git reescrito em 20/03/2026 para remover token exposto dos metadados de commits
+- politica de publicacao apos incidente: push com verificacao de segredos antes de enviar para `origin/main`
+- acao obrigatoria do mantenedor: revogar o token antigo no GitHub e gerar novo token, se ainda nao foi feito
