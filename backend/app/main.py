@@ -25,7 +25,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.routers import auth, dashboard, transactions, appointments, clients, subscriptions, ai, availability
+from app.routers import auth, dashboard, transactions, appointments, clients, subscriptions, ai, availability, stripe_webhook
 from app.services.notification_service import notification_service
 from app.limiter import limiter
 
@@ -140,6 +140,7 @@ app.include_router(transactions.router, prefix="/api")
 app.include_router(appointments.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
+app.include_router(stripe_webhook.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(availability.router, tags=["Availability"], prefix="/api/availability")
 

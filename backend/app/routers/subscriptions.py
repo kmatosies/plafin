@@ -3,14 +3,13 @@ Router de assinaturas (Stripe).
 Expõe o contrato usado pelo frontend para status, checkout e portal.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Literal
 from app.middleware.auth import get_current_user
 from app.services.stripe_service import (
     create_checkout_session,
     create_portal_session,
-    handle_webhook_event,
 )
 from app.config.plans import PLAN_FREE, PLAN_PRO, PLAN_LIMITS, PLAN_FEATURES, normalize_plan
 
@@ -126,21 +125,3 @@ async def customer_portal(
         raise HTTPException(status_code=500, detail=f"Erro ao criar portal: {str(e)}")
 
 
-@router.post("/webhook")
-async def stripe_webhook(request: Request):
-    """
-    Recebe eventos de webhook do Stripe.
-    Configure o endpoint no Dashboard do Stripe:
-    POST https://seudominio.com/api/subscriptions/webhook
-    """
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature", "")
-
-    try:
-        result = handle_webhook_event(payload, sig_header)
-        return {"status": "ok", **result}
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no webhook: {str(e)}")
