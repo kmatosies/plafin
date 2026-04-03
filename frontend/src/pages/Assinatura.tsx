@@ -24,7 +24,7 @@ export default function Assinatura() {
         pro: t('plans', 'pro') as any,
     }
 
-    const proPrice = currency === 'BRL' ? 'R$ 79,90' : 'US$ 19,90'
+    const proPrice = currency === 'BRL' ? 'R$ 74,90' : 'US$ 19,90'
 
     const handleCheckout = async () => {
         setIsCheckingOut(true)

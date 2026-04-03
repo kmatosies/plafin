@@ -110,7 +110,7 @@ export const translations = {
                 'Suporte prioritário 24/7',
             ],
             startingAt: 'A partir de',
-            price: 'R$ 79,90',
+            price: 'R$ 74,90',
             period: '/mês',
             cta: 'Fazer upgrade para o Pro',
             dismiss: 'Agora não',
