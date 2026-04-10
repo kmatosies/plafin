@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     smtp_pass: str = ""
     smtp_from: str = "no-reply@serviceos.app"
 
+    # Worker de notificações
+    notification_worker_enabled: bool = True
+    notification_worker_interval_seconds: int = 60
+    notification_worker_error_backoff_seconds: int = 300
+
     # WhatsApp (Evolution API) — PRO
     evolution_api_url: str = "http://localhost:8080"
     evolution_api_key: str = ""
