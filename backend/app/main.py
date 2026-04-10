@@ -40,6 +40,7 @@ logger = logging.getLogger("plafin.api")
 
 # --- Inicializar app ---
 settings = get_settings()
+WORKER_TASK_KEY = "notification_worker_task"
 
 
 def build_allowed_origins() -> list[str]:
@@ -62,13 +63,30 @@ def build_allowed_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: iniciar worker de notificações em background
-    logger.info("Iniciando worker de notificações...")
-    task = asyncio.create_task(notification_worker_loop())
+    # Startup: iniciar worker de notificações em background quando habilitado
+    task = None
+    if not settings.notification_worker_enabled:
+        logger.warning(
+            "notification_worker desabilitado via env (NOTIFICATION_WORKER_ENABLED=false)."
+        )
+    else:
+        ok, reason = notification_service.validate_worker_dependencies()
+        if ok:
+            logger.info("Iniciando worker de notificações...")
+            task = asyncio.create_task(notification_worker_loop())
+        else:
+            logger.error(
+                "notification_worker não iniciado por configuração inválida: %s",
+                reason,
+            )
+
+    setattr(app.state, WORKER_TASK_KEY, task)
     yield
     # Shutdown: cancelar a task
-    logger.info("Encerrando worker de notificações...")
-    task.cancel()
+    task = getattr(app.state, WORKER_TASK_KEY, None)
+    if task:
+        logger.info("Encerrando worker de notificações...")
+        task.cancel()
 
 async def notification_worker_loop():
     """Loop que processa notificações pendentes a cada 1 minuto."""
@@ -77,13 +95,23 @@ async def notification_worker_loop():
             # Processar um lote de notificações
             result = notification_service.process_pending_notifications(batch_size=20)
             if result["total"] > 0:
-                logger.info(f"Worker: Processadas {result['total']} notificações ({result['sent']} sucesso, {result['failed']} falha)")
+                logger.info(
+                    "Worker: Processadas %s notificações (%s sucesso, %s falha)",
+                    result["total"],
+                    result["sent"],
+                    result["failed"],
+                )
         except Exception as e:
-            # Condense error to avoid spamming the logs endlessly if key is just invalid
-            logger.error(f"Erro no loop do notification_worker: {e}")
-            await asyncio.sleep(300) # Dorme 5 min se deu erro grave para não 'floodar' com invalid key
-        
-        await asyncio.sleep(60) # Esperar 1 minuto
+            logger.exception(
+                "Erro no loop do notification_worker (supabase_host=%s): %s",
+                notification_service.get_supabase_host_for_logging(),
+                e,
+            )
+            await asyncio.sleep(
+                settings.notification_worker_error_backoff_seconds
+            )  # backoff para evitar flood de logs
+
+        await asyncio.sleep(settings.notification_worker_interval_seconds)
 
 app = FastAPI(
     title="Finance Agenda API",
@@ -163,4 +191,3 @@ async def health_check():
         "app": settings.app_name,
         "frontend_url": settings.frontend_url.rstrip("/"),
     }
-

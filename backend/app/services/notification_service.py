@@ -4,13 +4,17 @@ Processa a fila de notificações_outbox e envia emails.
 """
 
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from datetime import datetime
+from urllib.parse import urlparse
 
 from app.database import get_supabase_admin
 from app.config import get_settings
+
+logger = logging.getLogger("plafin.notification")
 
 
 class NotificationService:
@@ -62,7 +66,10 @@ class NotificationService:
 
         # Se não configurado, loga e interrompe sem falhar o worker
         if not getattr(settings, "smtp_host", None):
-            print(f"[NotificationService] SMTP não configurado. Email para {to_email} ignorado.")
+            logger.warning(
+                "SMTP não configurado. Email ignorado.",
+                extra={"to_email": to_email},
+            )
             return
 
         msg = MIMEMultipart("alternative")
@@ -77,6 +84,40 @@ class NotificationService:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_pass)
             server.sendmail(msg["From"], to_email, msg.as_string())
+
+    def get_supabase_host_for_logging(self) -> str:
+        """Retorna hostname do Supabase para logs (sem dados sensíveis)."""
+        settings = get_settings()
+        return urlparse(settings.supabase_url).hostname or "<host-ausente>"
+
+    def validate_worker_dependencies(self) -> tuple[bool, str]:
+        """Valida envs mínimos para o worker de notificações."""
+        settings = get_settings()
+        missing = []
+
+        if not settings.supabase_url:
+            missing.append("SUPABASE_URL")
+        if not settings.supabase_service_key:
+            missing.append("SUPABASE_SERVICE_KEY")
+
+        if missing:
+            return False, f"variáveis ausentes: {', '.join(missing)}"
+
+        parsed = urlparse(settings.supabase_url)
+        if not parsed.scheme or not parsed.hostname:
+            return (
+                False,
+                "SUPABASE_URL inválida: informe URL completa com esquema e host (ex: https://xxx.supabase.co)",
+            )
+
+        blocked_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "supabase-kong"}
+        if parsed.hostname in blocked_hosts:
+            return (
+                False,
+                f"SUPABASE_URL usa host inválido para produção: {parsed.hostname}",
+            )
+
+        return True, "ok"
 
     def process_pending_notifications(self, batch_size: int = 50) -> dict:
         """
@@ -131,7 +172,12 @@ class NotificationService:
                     }
                 ).eq("id", notif["id"]).execute()
                 failed += 1
-                print(f"[NotificationService] Falha ao processar notif {notif['id']}: {e}")
+                logger.exception(
+                    "Falha ao processar notificação id=%s channel=%s type=%s",
+                    notif.get("id"),
+                    notif.get("channel"),
+                    notif.get("type"),
+                )
 
         return {"sent": sent, "failed": failed, "total": len(notifications)}
 
