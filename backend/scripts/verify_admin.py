@@ -15,9 +15,12 @@ def verify_admin():
     supabase_key = os.environ.get("SUPABASE_KEY")
     supabase_service_key = os.environ.get("SUPABASE_SERVICE_KEY")
 
-    # Credenciais do admin encontradas no script de seed
-    admin_email = "kmatos_ies@hotmail.com"
-    admin_password = "Pl@fin022"
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "CHANGE_ME_STRONG_PASSWORD")
+
+    if admin_password == "CHANGE_ME_STRONG_PASSWORD":
+        print("[ERRO] Defina ADMIN_PASSWORD no ambiente antes de executar a verificação.")
+        sys.exit(1)
 
     print(f"--- Verificando usuario: {admin_email} ---")
     
