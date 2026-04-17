@@ -109,48 +109,6 @@ O projeto está em **fase ativa de desenvolvimento**, com base funcional e arqui
 - [ ] melhorar documentação de arquitetura e decisões técnicas
 - [ ] hardening de segurança para lançamento público contínuo
 
-## Setup local
-
-### Pré-requisitos
-
-- Node.js 20+
-- Python 3.11+
-- conta Supabase
-- conta Stripe (modo teste)
-
-### 1) Backend
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --port 8000
-```
-
-### 2) Frontend
-
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
-```
-
-## Segurança e exposição pública
-
-- não commitar `.env` ou credenciais
-- usar apenas chaves de teste em ambiente local
-- revisar webhooks/URLs internas antes de publicar
-- rotacionar credenciais se houver suspeita de vazamento histórico
-- manter secrets em Vercel/Render/Supabase, nunca em código-fonte
-
-## Screenshots
-
-> Placeholder para capturas atualizadas da interface (`/prints`) com contexto de fluxo de uso.
-
 ## Contribuição
 
 Veja o guia em [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -161,6 +119,4 @@ Este projeto está licenciado sob a [MIT License](LICENSE).
 
 ## Autor
 
-Desenvolvido por **Kleverton Matos**.
-
-Se quiser colaborar, abrir discussões técnicas ou trocar experiências de engenharia SaaS, sinta-se à vontade para abrir uma issue.
+Desenvolvido por **Kevin Matos**.
