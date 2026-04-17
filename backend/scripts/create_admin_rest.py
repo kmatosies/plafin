@@ -25,9 +25,13 @@ if not SUPABASE_URL or not SERVICE_KEY:
     print("❌ ERRO: Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo backend/.env")
     sys.exit(1)
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "kmatos_ies@hotmail.com")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Pl@fin022")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "CHANGE_ME_STRONG_PASSWORD")
 ADMIN_NAME = os.environ.get("ADMIN_NAME", "Admin Plafin")
+
+if ADMIN_PASSWORD == "CHANGE_ME_STRONG_PASSWORD":
+    print("❌ ERRO: Defina ADMIN_PASSWORD com uma senha forte no ambiente antes de executar.")
+    sys.exit(1)
 
 headers = {
     "apikey": SERVICE_KEY,
@@ -93,6 +97,6 @@ if user_id:
 
 print("\n🎉 Processo de criação do admin concluído!")
 print(f"   Email: {ADMIN_EMAIL}")
-print(f"   Senha: {ADMIN_PASSWORD}")
+print("   Senha: [NÃO EXIBIDA POR SEGURANÇA]")
 print("   Role: admin | Plano: PRO")
 print("\n⚠️  IMPORTANTE: Execute o script SQL de migração no Supabase antes de usar o sistema!")

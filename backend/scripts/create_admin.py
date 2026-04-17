@@ -30,9 +30,13 @@ def create_admin_user():
         sys.exit(1)
 
     # Credenciais do admin (defina via variáveis de ambiente ou edite aqui)
-    admin_email = os.environ.get("ADMIN_EMAIL", "kmatos_ies@hotmail.com")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Pl@fin022")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "CHANGE_ME_STRONG_PASSWORD")
     admin_name = os.environ.get("ADMIN_NAME", "Admin Plafin")
+
+    if admin_password == "CHANGE_ME_STRONG_PASSWORD":
+        print("❌ ERRO: Defina ADMIN_PASSWORD com uma senha forte no ambiente antes de executar.")
+        sys.exit(1)
 
     supabase: Client = create_client(supabase_url, supabase_service_key)
 
