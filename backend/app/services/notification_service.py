@@ -3,6 +3,7 @@ Serviço de notificações.
 Processa a fila de notificações_outbox e envia emails.
 """
 
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -11,6 +12,9 @@ from datetime import datetime
 
 from app.database import get_supabase_admin
 from app.config import get_settings
+
+
+logger = logging.getLogger("plafin.notifications")
 
 
 class NotificationService:
@@ -60,10 +64,9 @@ class NotificationService:
         """
         settings = get_settings()
 
-        # Se não configurado, loga e interrompe sem falhar o worker
+        # Missing SMTP must not be recorded as a successful delivery.
         if not getattr(settings, "smtp_host", None):
-            print(f"[NotificationService] SMTP não configurado. Email para {to_email} ignorado.")
-            return
+            raise RuntimeError("SMTP is not configured")
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -122,16 +125,20 @@ class NotificationService:
                 ).eq("id", notif["id"]).execute()
                 sent += 1
 
-            except Exception as e:
+            except Exception as exc:
                 # Marcar como falhou para reprocessamento manual
                 supabase.table("notifications_outbox").update(
                     {
                         "status": "failed",
-                        "error_message": str(e)[:500],
+                        "error_message": str(exc)[:500],
                     }
                 ).eq("id", notif["id"]).execute()
                 failed += 1
-                print(f"[NotificationService] Falha ao processar notif {notif['id']}: {e}")
+                logger.exception(
+                    "Notification delivery failed notification_id=%s channel=%s",
+                    notif.get("id"),
+                    channel,
+                )
 
         return {"sent": sent, "failed": failed, "total": len(notifications)}
 

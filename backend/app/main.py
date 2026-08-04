@@ -18,7 +18,7 @@ FastAPI app com todos os routers e CORS configurado.
 import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -44,46 +44,57 @@ settings = get_settings()
 
 def build_allowed_origins() -> list[str]:
     origins = {
-        settings.frontend_url.rstrip("/"),
+        settings.frontend_url_normalized,
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
     }
 
-    if settings.frontend_origins:
-        origins.update(
-            origin.strip().rstrip("/")
-            for origin in settings.frontend_origins.split(",")
-            if origin.strip()
-        )
+    origins.update(settings.frontend_origins_normalized)
 
     return sorted(origin for origin in origins if origin)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: iniciar worker de notificações em background
-    logger.info("Iniciando worker de notificações...")
-    task = asyncio.create_task(notification_worker_loop())
-    yield
-    # Shutdown: cancelar a task
-    logger.info("Encerrando worker de notificações...")
-    task.cancel()
+    task: asyncio.Task | None = None
+    if settings.enable_notification_worker:
+        logger.info("Starting notification worker")
+        task = asyncio.create_task(notification_worker_loop())
+    else:
+        logger.info("Notification worker disabled")
+
+    try:
+        yield
+    finally:
+        if task is not None:
+            logger.info("Stopping notification worker")
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 async def notification_worker_loop():
     """Loop que processa notificações pendentes a cada 1 minuto."""
     while True:
         try:
-            # Processar um lote de notificações
             result = notification_service.process_pending_notifications(batch_size=20)
             if result["total"] > 0:
-                logger.info(f"Worker: Processadas {result['total']} notificações ({result['sent']} sucesso, {result['failed']} falha)")
-        except Exception as e:
-            # Condense error to avoid spamming the logs endlessly if key is just invalid
-            logger.error(f"Erro no loop do notification_worker: {e}")
-            await asyncio.sleep(300) # Dorme 5 min se deu erro grave para não 'floodar' com invalid key
-        
-        await asyncio.sleep(60) # Esperar 1 minuto
+                logger.info(
+                    "Notification worker processed total=%s sent=%s failed=%s",
+                    result["total"],
+                    result["sent"],
+                    result["failed"],
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Notification worker failed; retrying in 300 seconds",
+            )
+            await asyncio.sleep(300)
+            continue
+
+        await asyncio.sleep(60)
 
 app = FastAPI(
     title="Finance Agenda API",
@@ -162,6 +173,5 @@ async def health_check():
     return {
         "status": "healthy",
         "app": settings.app_name,
-        "frontend_url": settings.frontend_url.rstrip("/"),
+        "frontend_url": settings.frontend_url_normalized,
     }
-
