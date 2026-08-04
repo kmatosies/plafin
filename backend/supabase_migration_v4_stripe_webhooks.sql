@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 
 CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_status_created
   ON stripe_webhook_events(status, created_at DESC);
+
+ALTER TABLE stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE stripe_webhook_events FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE stripe_webhook_events
+  TO service_role;
