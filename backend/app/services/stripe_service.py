@@ -49,7 +49,7 @@ def _price_to_plan(price_id: str | None) -> str:
     settings = get_settings()
     if not price_id:
         return PLAN_FREE
-    if price_id == settings.stripe_price_pro_monthly:
+    if price_id == settings.stripe_price_pro_monthly_brl:
         return PLAN_PRO
     if price_id == settings.stripe_price_starter_monthly:
         return PLAN_STARTER
@@ -229,7 +229,7 @@ def create_checkout_session(
             "monthly": settings.stripe_price_starter_monthly,
         },
         PLAN_PRO: {
-            "monthly": settings.stripe_price_pro_monthly,
+            "monthly": settings.stripe_price_pro_monthly_brl,
         },
     }
 

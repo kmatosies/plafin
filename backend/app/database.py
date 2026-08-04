@@ -17,7 +17,7 @@ def get_supabase_client() -> Client:
     global _anon_client
     if _anon_client is None:
         settings = get_settings()
-        _anon_client = create_client(settings.supabase_url, settings.supabase_key)
+        _anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     return _anon_client
 
 
@@ -26,5 +26,8 @@ def get_supabase_admin() -> Client:
     global _admin_client
     if _admin_client is None:
         settings = get_settings()
-        _admin_client = create_client(settings.supabase_url, settings.supabase_service_key)
+        _admin_client = create_client(
+            settings.supabase_url,
+            settings.supabase_service_role_key,
+        )
     return _admin_client

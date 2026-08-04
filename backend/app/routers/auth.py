@@ -96,7 +96,7 @@ async def login(request: Request, data: UserLogin):
         # O RLS do Supabase permite que o usuário leia o próprio perfil com seu token
         settings = get_settings()
         from supabase import create_client as _create_client
-        user_client = _create_client(settings.supabase_url, settings.supabase_key)
+        user_client = _create_client(settings.supabase_url, settings.supabase_anon_key)
         user_client.postgrest.auth(auth_response.session.access_token)
 
         profile = (
@@ -136,7 +136,11 @@ async def reset_password(data: PasswordReset):
 
         supabase.auth.reset_password_email(
             data.email,
-            options={"redirect_to": f"{settings.frontend_url}/reset-password"},
+            options={
+                "redirect_to": (
+                    f"{settings.frontend_url_normalized}/reset-password"
+                )
+            },
         )
 
         return {"message": "Se o email existir, um link de recuperação foi enviado."}

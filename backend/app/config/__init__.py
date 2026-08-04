@@ -3,8 +3,16 @@ Configuração centralizada do aplicativo.
 Carrega variáveis de ambiente do .env
 """
 
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urlparse
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE = BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -18,8 +26,17 @@ class Settings(BaseSettings):
 
     # Supabase
     supabase_url: str = ""
-    supabase_key: str = ""
-    supabase_service_key: str = ""
+    supabase_anon_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "SUPABASE_KEY"),
+    )
+    supabase_service_role_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "SUPABASE_SERVICE_KEY",
+        ),
+    )
 
     # Stripe
     stripe_secret_key: str = ""
@@ -29,10 +46,18 @@ class Settings(BaseSettings):
     stripe_price_starter_monthly: str = ""
 
     # Stripe — Plano PRO
-    stripe_price_pro_monthly: str = ""
+    stripe_price_pro_monthly_brl: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "STRIPE_PRICE_PRO_MONTHLY_BRL",
+            "STRIPE_PRICE_PRO_MONTHLY",
+        ),
+    )
+    stripe_price_pro_monthly_usd: str = ""
 
     # Gemini
     gemini_api_key: str = ""
+    resend_api_key: str = ""
 
     # Email (SMTP) para notificações
     smtp_host: str = ""
@@ -46,9 +71,48 @@ class Settings(BaseSettings):
     evolution_api_key: str = ""
     evolution_instance: str = ""
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # Optional background work
+    enable_notification_worker: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=str(ENV_FILE),
+        env_file_encoding="utf-8",
+        # Render and shared local env files may include operator-managed keys.
+        # Every key consumed by this application is still declared above.
+        extra="ignore",
+    )
+
+    @staticmethod
+    def _normalize_public_url(raw_url: str, *, default_scheme: str = "https") -> str:
+        raw_url = (raw_url or "").strip().rstrip("/")
+        if not raw_url:
+            return ""
+
+        if "://" not in raw_url:
+            raw_url = f"{default_scheme}://{raw_url}"
+
+        parsed = urlparse(raw_url)
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+
+        return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    @property
+    def frontend_url_normalized(self) -> str:
+        return self._normalize_public_url(self.frontend_url)
+
+    @property
+    def backend_url_normalized(self) -> str:
+        return self._normalize_public_url(self.backend_url)
+
+    @property
+    def frontend_origins_normalized(self) -> list[str]:
+        origins: list[str] = []
+        for origin in self.frontend_origins.split(","):
+            normalized = self._normalize_public_url(origin)
+            if normalized:
+                origins.append(normalized)
+        return origins
 
 
 @lru_cache()
