@@ -3,29 +3,32 @@ Router de autenticação.
 Registro, login e reset de senha via Supabase Auth.
 """
 
+import logging
+
+import httpx
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.schemas.user import (
     UserRegister,
     UserLogin,
     PasswordReset,
+    PasswordUpdate,
     AuthResponse,
     ProfileResponse,
 )
-from app.database import get_supabase_client, get_supabase_admin
+from app.database import create_supabase_anon_client, get_supabase_admin
 from app.config import get_settings
 from app.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
+logger = logging.getLogger("plafin.auth")
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: UserRegister):
     """Registra um novo usuário e cria seu perfil."""
     try:
-        supabase = get_supabase_client()
-        settings = get_settings()
-
+        supabase = create_supabase_anon_client()
         # 1. Criar usuário no Supabase Auth
         auth_response = supabase.auth.sign_up({
             "email": data.email,
@@ -67,10 +70,11 @@ async def register(data: UserRegister):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to register user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao registrar: {str(e)}",
+            detail="Não foi possível concluir o cadastro.",
         )
 
 
@@ -79,7 +83,7 @@ async def register(data: UserRegister):
 async def login(request: Request, data: UserLogin):
     """Autentica o usuário e retorna token JWT (Max: 5 tentativas por min)."""
     try:
-        supabase = get_supabase_client()
+        supabase = create_supabase_anon_client()
 
         auth_response = supabase.auth.sign_in_with_password({
             "email": data.email,
@@ -94,16 +98,12 @@ async def login(request: Request, data: UserLogin):
 
         # Buscar perfil usando o access_token do usuário (sem precisar do admin/service_role key)
         # O RLS do Supabase permite que o usuário leia o próprio perfil com seu token
-        settings = get_settings()
-        from supabase import create_client as _create_client
-        user_client = _create_client(settings.supabase_url, settings.supabase_key)
-        user_client.postgrest.auth(auth_response.session.access_token)
+        supabase.postgrest.auth(auth_response.session.access_token)
 
         profile = (
-            user_client.table("profiles")
+            supabase.table("profiles")
             .select("*")
             .eq("id", auth_response.user.id)
-            .single()
             .execute()
         )
 
@@ -115,15 +115,16 @@ async def login(request: Request, data: UserLogin):
 
         return AuthResponse(
             access_token=auth_response.session.access_token,
-            user=ProfileResponse(**profile.data),
+            user=ProfileResponse(**profile.data[0]),
         )
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.info("Login rejected")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Falha no login: {str(e)}",
+            detail="Email ou senha inválidos.",
         )
 
 
@@ -132,7 +133,7 @@ async def reset_password(data: PasswordReset):
     """Envia email de reset de senha."""
     try:
         settings = get_settings()
-        supabase = get_supabase_client()
+        supabase = create_supabase_anon_client()
 
         supabase.auth.reset_password_email(
             data.email,
@@ -141,7 +142,7 @@ async def reset_password(data: PasswordReset):
 
         return {"message": "Se o email existir, um link de recuperação foi enviado."}
 
-    except Exception as e:
+    except Exception:
         # Não revelar se o email existe ou não — segurança
         return {"message": "Se o email existir, um link de recuperação foi enviado."}
 
@@ -155,40 +156,36 @@ async def logout(
     O frontend também deve remover o token do armazenamento local.
     """
     try:
-        from app.database import get_supabase_client
-        supabase = get_supabase_client()
-        supabase.auth.sign_out()
-        return {"message": "Logout realizado com sucesso."}
+        settings = get_settings()
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"{settings.supabase_url.rstrip('/')}/auth/v1/logout",
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Authorization": f"Bearer {credentials.credentials}",
+                },
+            )
     except Exception:
-        # Mesmo em caso de erro, considerar logout bem-sucedido
-        return {"message": "Logout realizado com sucesso."}
+        logger.info("Remote logout could not be confirmed")
+
+    # Local state is cleared by the frontend even if Supabase is unavailable.
+    return {"message": "Logout realizado com sucesso."}
 
 
 @router.post("/update-password")
-async def update_password(data: dict):
+async def update_password(data: PasswordUpdate):
     """
     Redefine a senha do usuário usando o access_token de recuperação
     enviado pelo Supabase via email (link de reset).
     """
     try:
-        access_token = data.get("access_token")
-        new_password = data.get("new_password")
-
-        if not access_token or not new_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="access_token e new_password são obrigatórios.",
-            )
-        if len(new_password) < 8:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A senha deve ter no mínimo 8 caracteres.",
-            )
-
-        supabase = get_supabase_client()
+        supabase = create_supabase_anon_client()
 
         # Usa o token de recuperação para criar uma sessão temporária
-        session_res = supabase.auth.set_session(access_token=access_token, refresh_token="")
+        session_res = supabase.auth.set_session(
+            access_token=data.access_token,
+            refresh_token=data.refresh_token,
+        )
 
         if not session_res or not session_res.user:
             raise HTTPException(
@@ -197,14 +194,15 @@ async def update_password(data: dict):
             )
 
         # Atualiza a senha com a sessão ativa
-        supabase.auth.update_user({"password": new_password})
+        supabase.auth.update_user({"password": data.new_password})
 
         return {"message": "Senha redefinida com sucesso."}
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to update password from recovery session")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao redefinir senha: {str(e)}",
+            detail="Não foi possível redefinir a senha.",
         )

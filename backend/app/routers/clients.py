@@ -62,14 +62,13 @@ async def get_client(
         .select("*")
         .eq("id", client_id)
         .eq("user_id", current_user["id"])
-        .single()
         .execute()
     )
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    return _serialize_client(result.data)
+    return _serialize_client(result.data[0])
 
 
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
@@ -126,6 +125,7 @@ async def update_client(
         supabase.table("clients")
         .update(update_data)
         .eq("id", client_id)
+        .eq("user_id", current_user["id"])
         .execute()
     )
 
@@ -150,7 +150,13 @@ async def archive_client(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    supabase.table("clients").update({"archived": True}).eq("id", client_id).execute()
+    (
+        supabase.table("clients")
+        .update({"archived": True})
+        .eq("id", client_id)
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
     return {"message": "Cliente arquivado com sucesso."}
 
 
@@ -172,7 +178,13 @@ async def reactivate_client(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    supabase.table("clients").update({"archived": False}).eq("id", client_id).execute()
+    (
+        supabase.table("clients")
+        .update({"archived": False})
+        .eq("id", client_id)
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
     return {"message": "Cliente reativado com sucesso."}
 
 
@@ -194,7 +206,13 @@ async def delete_client(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    supabase.table("clients").delete().eq("id", client_id).execute()
+    (
+        supabase.table("clients")
+        .delete()
+        .eq("id", client_id)
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
 
     # Decrementar contador atomicamente
     UsageService.decrement_counter(current_user["id"], "clients_total", "all")

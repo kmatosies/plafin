@@ -18,14 +18,23 @@ FastAPI app com todos os routers e CORS configurado.
 import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.routers import auth, dashboard, transactions, appointments, clients, subscriptions, ai, availability
+from app.routers import (
+    appointments,
+    auth,
+    availability,
+    clients,
+    dashboard,
+    stripe_webhook,
+    subscriptions,
+    transactions,
+)
 from app.services.notification_service import notification_service
 from app.limiter import limiter
 
@@ -40,76 +49,64 @@ logger = logging.getLogger("plafin.api")
 
 # --- Inicializar app ---
 settings = get_settings()
-WORKER_TASK_KEY = "notification_worker_task"
 
 
 def build_allowed_origins() -> list[str]:
     origins = {
-        settings.frontend_url.rstrip("/"),
+        settings.frontend_url_normalized,
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
     }
 
-    if settings.frontend_origins:
-        origins.update(
-            origin.strip().rstrip("/")
-            for origin in settings.frontend_origins.split(",")
-            if origin.strip()
-        )
+    origins.update(settings.frontend_origins_normalized)
 
     return sorted(origin for origin in origins if origin)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: iniciar worker de notificações em background quando habilitado
-    task = None
-    if not settings.notification_worker_enabled:
-        logger.warning(
-            "notification_worker desabilitado via env (NOTIFICATION_WORKER_ENABLED=false)."
-        )
-    else:
+    task: asyncio.Task | None = None
+    if settings.enable_notification_worker:
         ok, reason = notification_service.validate_worker_dependencies()
         if ok:
-            logger.info("Iniciando worker de notificações...")
+            logger.info("Starting notification worker")
             task = asyncio.create_task(notification_worker_loop())
         else:
-            logger.error(
-                "notification_worker não iniciado por configuração inválida: %s",
-                reason,
-            )
+            logger.error("Notification worker not started: %s", reason)
+    else:
+        logger.info("Notification worker disabled")
 
-    setattr(app.state, WORKER_TASK_KEY, task)
-    yield
-    # Shutdown: cancelar a task
-    task = getattr(app.state, WORKER_TASK_KEY, None)
-    if task:
-        logger.info("Encerrando worker de notificações...")
-        task.cancel()
+    try:
+        yield
+    finally:
+        if task is not None:
+            logger.info("Stopping notification worker")
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 async def notification_worker_loop():
     """Loop que processa notificações pendentes a cada 1 minuto."""
     while True:
         try:
-            # Processar um lote de notificações
             result = notification_service.process_pending_notifications(batch_size=20)
             if result["total"] > 0:
                 logger.info(
-                    "Worker: Processadas %s notificações (%s sucesso, %s falha)",
+                    "Notification worker processed total=%s sent=%s failed=%s",
                     result["total"],
                     result["sent"],
                     result["failed"],
                 )
-        except Exception as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             logger.exception(
-                "Erro no loop do notification_worker (supabase_host=%s): %s",
-                notification_service.get_supabase_host_for_logging(),
-                e,
+                "Notification worker failed; retrying in %s seconds",
+                settings.notification_worker_error_backoff_seconds,
             )
-            await asyncio.sleep(
-                settings.notification_worker_error_backoff_seconds
-            )  # backoff para evitar flood de logs
+            await asyncio.sleep(settings.notification_worker_error_backoff_seconds)
+            continue
 
         await asyncio.sleep(settings.notification_worker_interval_seconds)
 
@@ -168,8 +165,8 @@ app.include_router(transactions.router, prefix="/api")
 app.include_router(appointments.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
-app.include_router(availability.router, tags=["Availability"], prefix="/api/availability")
+app.include_router(stripe_webhook.router, prefix="/api")
+app.include_router(availability.router, prefix="/api")
 
 
 # --- Rota raiz ---
@@ -189,5 +186,5 @@ async def health_check():
     return {
         "status": "healthy",
         "app": settings.app_name,
-        "frontend_url": settings.frontend_url.rstrip("/"),
+        "frontend_url": settings.frontend_url_normalized,
     }

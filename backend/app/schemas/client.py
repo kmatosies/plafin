@@ -40,10 +40,9 @@ class ClientUpdate(BaseModel):
 
 class ClientResponse(ClientBase):
     """Resposta com dados completos do cliente."""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
     id: str
     user_id: str
     archived: bool = False
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True

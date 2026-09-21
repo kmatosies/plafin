@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Optional AI integration. Not installed in the production API image.
+google-genai==2.24.0
