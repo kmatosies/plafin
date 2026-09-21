@@ -449,18 +449,35 @@ export const clientsApi = {
 
 // ─── Availability API ─────────────────────────────────────────────────────────
 
-export interface AvailabilitySlot {
+export interface AvailabilityRule {
+    id: string
+    tenant_id: string
+    weekday: number
     start_time: string
     end_time: string
+    slot_duration: number
+}
+
+export type AvailabilityRuleInput = Omit<AvailabilityRule, 'id' | 'tenant_id'>
+
+export interface AvailabilitySlotsResponse {
+    date: string
+    slots: string[]
 }
 
 export const availabilityApi = {
     getSlots: (date: string) =>
-        api.get<AvailabilitySlot[]>(`/api/availability/slots?date=${date}`),
+        api.get<AvailabilitySlotsResponse>(`/api/availability/slots?date=${date}`),
 
     getConfig: () =>
-        api.get<any>('/api/availability/config'),
+        api.get<AvailabilityRule[]>('/api/availability/config'),
 
-    updateConfig: (data: any) =>
-        api.post<any>('/api/availability/config', data),
+    createConfig: (data: AvailabilityRuleInput) =>
+        api.post<AvailabilityRule>('/api/availability/config', data),
+
+    updateConfig: (id: string, data: Partial<AvailabilityRuleInput>) =>
+        api.put<AvailabilityRule>(`/api/availability/config/${id}`, data),
+
+    deleteConfig: (id: string) =>
+        api.delete<void>(`/api/availability/config/${id}`),
 }

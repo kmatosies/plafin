@@ -1,30 +1,36 @@
 import { useState } from 'react'
-import { Check, Zap, Star, ChevronRight } from 'lucide-react'
+import { Check, Zap, Star, ChevronRight, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from '../i18n/useTranslation'
 import { subscriptionApi } from '../lib/api'
 
 export default function Assinatura() {
-    const { user, subscription, refreshSubscription, locale, setLocale } = useAuth()
+    const { user, subscription, refreshSubscription, locale } = useAuth()
     const { t } = useTranslation(locale)
     const isBR = locale === 'pt-BR'
 
     // Normaliza starter para free visualmente (já que deixaremos de usar o starter)
     const currentPlan = subscription?.plan ?? (user?.plan === 'pro' ? 'pro' : 'free')
-    const [currency, setCurrency] = useState<'BRL' | 'USD'>(isBR ? 'BRL' : 'USD')
     const [isCheckingOut, setIsCheckingOut] = useState(false)
     const [isOpeningPortal, setIsOpeningPortal] = useState(false)
 
-    // Textos do plano a partir das traduções
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const plansInfo = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        free: t('plans', 'free') as any, // casting to any here since typescript signature returns string
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        pro: t('plans', 'pro') as any,
+    type PlanInfo = {
+        name: string
+        period: string
+        description: string
+        buttonText: string
+        features: string[]
+        popular?: string
     }
 
-    const proPrice = currency === 'BRL' ? 'R$ 79,90' : 'US$ 19,90'
+    // Textos do plano a partir das traduções
+    const plansInfo = {
+        free: t('plans', 'free') as unknown as PlanInfo,
+        pro: t('plans', 'pro') as unknown as PlanInfo,
+    }
+
+    const proPrice = import.meta.env.VITE_PRO_MONTHLY_PRICE_BRL?.trim()
+        || (isBR ? 'Ver no checkout' : 'See at checkout')
 
     const handleCheckout = async () => {
         setIsCheckingOut(true)
@@ -88,43 +94,6 @@ export default function Assinatura() {
                     </p>
                 )}
 
-                {/* Seletor de Moeda */}
-                <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    background: 'var(--hover)',
-                    padding: '8px 16px',
-                    borderRadius: 99,
-                    fontSize: 14,
-                }}>
-                    <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>
-                        {t('plans', 'currencyLabel')}
-                    </span>
-                    {(['BRL', 'USD'] as const).map(c => (
-                        <button
-                            key={c}
-                            onClick={() => {
-                                setCurrency(c)
-                                if (c === 'USD' && locale !== 'en-US') setLocale('en-US')
-                                if (c === 'BRL' && locale !== 'pt-BR') setLocale('pt-BR')
-                            }}
-                            style={{
-                                padding: '4px 14px',
-                                borderRadius: 99,
-                                border: 'none',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                background: currency === c ? 'var(--brand-green)' : 'transparent',
-                                color: currency === c ? 'white' : 'var(--text-3)',
-                                transition: 'all 0.2s',
-                            }}
-                        >
-                            {c === 'BRL' ? '🇧🇷 BRL' : '🇺🇸 USD'}
-                        </button>
-                    ))}
-                </div>
             </div>
 
             {/* Cards dos Planos */}
@@ -155,8 +124,12 @@ export default function Assinatura() {
                     </div>
 
                     <div style={{ marginBottom: 4 }}>
-                        <span style={{ fontSize: 38, fontWeight: 900, color: 'var(--text)' }}>
-                            {currency === 'BRL' ? 'R$ 0' : 'US$ 0'}
+                        <span style={{
+                            fontSize: proPrice.length > 12 ? 24 : 38,
+                            fontWeight: 900,
+                            color: 'var(--text)',
+                        }}>
+                            R$ 0
                         </span>
                         <span style={{ color: 'var(--text-3)', fontSize: 15, fontWeight: 500 }}>
                             {plansInfo.free.period}
@@ -280,34 +253,17 @@ export default function Assinatura() {
                             </li>
                         ))}
                     </ul>
-                    <div style={{
-                        marginTop: 20,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        background: 'linear-gradient(135deg, rgba(37,211,102,0.12), rgba(37,211,102,0.05))',
-                        border: '1px solid rgba(37,211,102,0.35)',
-                        borderRadius: 10,
-                        padding: '10px 14px',
-                    }}>
-                        <span style={{ fontSize: 20 }}>{'\U0001f916'}</span>
-                        <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#25D366', margin: 0 }}>
-                                {t('plans', 'whatsappExclusiveTitle')}
-                            </p>
-                            <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
-                                {t('plans', 'whatsappExclusiveSubtitle')}
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </div>
 
             {/* Nota de cancelamento */}
-            <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 13, marginTop: 32 }}>
-                {isBR
-                    ? '🔒 Pagamento seguro via Stripe. Cancele quando quiser, sem multas.'
-                    : '🔒 Secure payment via Stripe. Cancel anytime, no fees.'}
+            <p style={{ display: 'flex', justifyContent: 'center', gap: 8, color: 'var(--text-3)', fontSize: 13, marginTop: 32 }}>
+                <ShieldCheck size={16} aria-hidden="true" />
+                <span>
+                    {isBR
+                        ? 'Pagamento seguro via Stripe. Cancele quando quiser, sem multas.'
+                        : 'Secure payment via Stripe in BRL. Cancel anytime, no fees.'}
+                </span>
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
                 <button className="btn btn-outline" onClick={() => void refreshSubscription()}>
