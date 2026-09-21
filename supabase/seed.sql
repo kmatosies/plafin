@@ -1,0 +1,2 @@
+-- Intentionally empty. Functional tests create and remove synthetic fixtures
+-- inside transactions.
