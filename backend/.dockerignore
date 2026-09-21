@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.venv
+.tmp
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+scripts
+*.sql
+*.log
+.git
+.gitignore
+README.md

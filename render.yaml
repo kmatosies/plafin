@@ -1,8 +1,35 @@
 services:
   - type: web
-    name: saas-finance-agenda-api
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    name: plafin
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeployTrigger: commit
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: Plafin
+      - key: ENABLE_NOTIFICATION_WORKER
+        value: "false"
+      - key: FRONTEND_URL
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: BUSINESS_TIMEZONE
+        value: America/Sao_Paulo
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO_MONTHLY_BRL
+        sync: false
