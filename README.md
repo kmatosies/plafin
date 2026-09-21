@@ -40,8 +40,8 @@ O Plafin busca resolver isso com uma aplicação única, organizada por fluxos d
 - gestão de agendamentos
 - controle de planos e recursos por assinatura
 - integração de pagamentos com Stripe (checkout/portal)
-- camada de IA para apoio financeiro (em evolução)
-- base para automações de notificações e WhatsApp (em evolução)
+- integração de IA preparada para uma fase posterior, desativada no runtime atual
+- base para notificações e WhatsApp, também desativada no runtime atual
 
 ## Arquitetura (visão geral)
 
@@ -56,8 +56,8 @@ O Plafin busca resolver isso com uma aplicação única, organizada por fluxos d
 ### Backend
 
 - **FastAPI** (API REST)
-- roteadores por domínio (`auth`, `dashboard`, `transactions`, `clients`, `appointments`, `subscriptions`, `ai`, `availability`)
-- serviços de integração (Supabase, Stripe, IA, notificações)
+- roteadores por domínio (`auth`, `dashboard`, `transactions`, `clients`, `appointments`, `subscriptions`, `availability`)
+- serviços de integração (Supabase e Stripe; IA/notificações fora do caminho crítico)
 - middlewares (auth/acesso)
 - rate limit com SlowAPI
 
@@ -80,7 +80,7 @@ O Plafin busca resolver isso com uma aplicação única, organizada por fluxos d
 ## Deploy (visão prática)
 
 - `vercel.json`: build do frontend via raiz do monorepo
-- `render.yaml`: serviço web Python para API
+- `render.yaml`: serviço web Docker para API
 - variáveis sensíveis configuradas apenas em ambiente (não versionadas)
 
 Documentação de deploy: `docs/deploy.md`.

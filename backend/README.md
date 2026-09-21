@@ -1,109 +1,71 @@
-# 🚀 SaaS Finance Agenda — Backend
+# Backend do Plafin
 
-API backend do sistema SaaS de gestão financeira, agenda e automação com IA.
+API FastAPI para autenticacao, clientes, financeiro, agenda, disponibilidade e
+assinaturas Stripe.
 
-## Stack Tecnológico
+## Requisitos
 
-- **Python 3.11+** + **FastAPI**
-- **Supabase** (PostgreSQL + Auth)
-- **Stripe** (Pagamentos e assinaturas)
-- **Google Gemini** (IA Financeira)
-- **Evolution API** (WhatsApp)
+- Python 3.11
+- Supabase local ou gerenciado
+- Docker para a imagem de producao
 
-## Setup Rápido
+## Setup local
 
-### 1. Criar ambiente virtual e instalar dependências
-
-```bash
+```powershell
 cd backend
 python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# Linux/Mac
-source .venv/bin/activate
-
-pip install -r requirements.txt
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt -r requirements-dev.txt
+Copy-Item .env.example .env
 ```
 
-### 2. Configurar variáveis de ambiente
+Preencha apenas valores locais no `.env`. Gemini, Evolution, SMTP e o worker
+nao sao necessarios para importar ou iniciar a API.
 
-```bash
-cp .env.example .env
-# Edite o .env com suas chaves
-```
-
-### 3. Configurar Supabase
-
-1. Acesse [supabase.com](https://supabase.com) e crie um projeto
-2. Vá em **SQL Editor** e execute o conteúdo de `supabase_schema.sql`
-3. Copie a **URL** e as **chaves** (anon e service_role) para o `.env`
-
-### 4. Executar o servidor
-
-```bash
+```powershell
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 5. Acessar documentação
+- Health: <http://localhost:8000/health>
+- Swagger: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+## Testes
 
-## Estrutura do Projeto
-
-```
-backend/
-├── app/
-│   ├── main.py              # FastAPI app principal
-│   ├── config.py             # Variáveis de ambiente
-│   ├── database.py           # Conexão Supabase
-│   ├── middleware/
-│   │   └── auth.py           # Autenticação JWT
-│   ├── routers/
-│   │   ├── auth.py           # Registro, login, reset
-│   │   ├── dashboard.py      # Dados do dashboard
-│   │   ├── transactions.py   # CRUD transações
-│   │   ├── appointments.py   # CRUD agendamentos
-│   │   ├── clients.py        # CRUD clientes
-│   │   ├── subscriptions.py  # Stripe checkout/portal
-│   │   └── ai.py             # Agentes de IA
-│   ├── services/
-│   │   ├── supabase_service.py
-│   │   ├── stripe_service.py
-│   │   ├── ai_finance_agent.py
-│   │   └── ai_whatsapp_agent.py
-│   └── schemas/
-│       ├── user.py
-│       ├── transaction.py
-│       ├── appointment.py
-│       └── client.py
-├── supabase_schema.sql       # SQL para criar tabelas
-├── requirements.txt
-├── .env.example
-└── README.md
+```powershell
+python -m pytest
 ```
 
-## Endpoints Principais
+O teste de integracao com Supabase local e opt-in:
 
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/api/auth/register` | Registrar usuário |
-| POST | `/api/auth/login` | Login |
-| GET | `/api/dashboard/` | Dados do dashboard |
-| GET/POST | `/api/transactions/` | Listar/criar transações |
-| GET/POST | `/api/appointments/` | Listar/criar agendamentos |
-| GET/POST | `/api/clients/` | Listar/criar clientes |
-| POST | `/api/subscriptions/create-checkout` | Criar checkout Stripe |
-| POST | `/api/ai/finance/analyze` | Análise financeira IA |
-| POST | `/api/ai/finance/chat` | Chat com IA financeira |
-| POST | `/api/ai/whatsapp/webhook` | Webhook WhatsApp |
+```powershell
+$env:RUN_SUPABASE_INTEGRATION='1'
+python -m pytest tests/test_supabase_integration.py
+```
 
-## Planos
+## Docker
 
-| Plano | Recursos |
-|---|---|
-| **Free** | Dashboard básico, até 50 transações/mês |
-| **Pro** | Dashboard completo + IA financeira |
-| **Enterprise** | Tudo + automação WhatsApp |
+```powershell
+docker build -t plafin-backend:local backend
+docker run --rm -p 8000:8000 --env-file backend/.env plafin-backend:local
+```
+
+A imagem roda como usuario nao-root, respeita `PORT` e possui health check.
+O worker permanece desabilitado por padrao no servico web.
+
+## Variaveis
+
+Use `.env.example` como fonte de nomes. Em configuracoes novas, use:
+
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `STRIPE_PRICE_PRO_MONTHLY_BRL`
+- `ENABLE_NOTIFICATION_WORKER=false`
+
+Aliases legados sao apenas uma ponte de migracao. O Stripe deve permanecer em
+test mode e o Price selecionado deve ser mensal e em BRL.
+
+As integracoes de IA ficam em `requirements-phase2.txt` e nao fazem parte da
+imagem de producao atual.
+
+Veja `../docs/deploy.md` e os relatorios do Ciclo 02 em `../Gestão/`.
