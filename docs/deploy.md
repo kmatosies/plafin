@@ -103,5 +103,5 @@ Depois, validar login, isolamento entre usuarios, clientes, transacoes,
 disponibilidade, conflito de agenda, checkout BRL, portal e reenvio do mesmo
 webhook. O status `Live` no painel nao substitui essas verificacoes.
 
-Consulte os relatorios em `Gestão/PLAFIN_CYCLE_02_*.md` para evidencias,
+Consulte os relatorios em `gestao/02-fases/fase-01-mvp/ciclo-02-estabilizacao/2026-09-21-execucao-01/relatorios/` para evidencias,
 riscos, rollback e passos manuais detalhados.

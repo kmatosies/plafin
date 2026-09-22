@@ -68,4 +68,4 @@ test mode e o Price selecionado deve ser mensal e em BRL.
 As integracoes de IA ficam em `requirements-phase2.txt` e nao fazem parte da
 imagem de producao atual.
 
-Veja `../docs/deploy.md` e os relatorios do Ciclo 02 em `../Gestão/`.
+Veja `../docs/deploy.md` e os relatorios do Ciclo 02 em `../gestao/`.

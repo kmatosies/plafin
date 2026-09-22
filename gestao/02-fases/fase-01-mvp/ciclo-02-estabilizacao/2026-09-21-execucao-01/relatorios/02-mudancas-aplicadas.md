@@ -93,7 +93,7 @@ o checkout em vez de inventar um preco.
   procedimentos atualizados.
 - `backend/tests/*`: cobertura de settings, startup, auth, agenda, planos,
   Stripe e usage.
-- `Gestão/PLAFIN_CYCLE_02_*.md`: handoff verificavel deste ciclo.
+- `gestao/02-fases/fase-01-mvp/ciclo-02-estabilizacao/2026-09-21-execucao-01/relatorios/`: handoff verificavel deste ciclo.
 
 ## Alteracoes de negocio explicitamente justificadas
 
