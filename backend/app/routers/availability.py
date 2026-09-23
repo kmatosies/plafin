@@ -1,16 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
 from app.middleware.auth import get_current_user
 from app.schemas.availability import AvailabilityCreate, AvailabilityUpdate, AvailabilityResponse, SlotResponse
 from app.database import get_supabase_admin
+from app.config import get_settings
+from zoneinfo import ZoneInfo
 
-router = APIRouter(prefix="/agenda", tags=["Agenda"])
+router = APIRouter(prefix="/availability", tags=["Availability"])
+
+
+def _business_timezone() -> ZoneInfo:
+    return ZoneInfo(get_settings().business_timezone)
+
+
+def _to_storage(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _from_storage(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(_business_timezone())
 
 
 def _availability_query(supabase, user_id: str):
     return supabase.table('availability').select('*').eq('tenant_id', str(user_id))
 
-@router.post("/availability", response_model=AvailabilityResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/config", response_model=AvailabilityResponse, status_code=status.HTTP_201_CREATED)
 async def create_availability(
     data: AvailabilityCreate,
     current_user: dict = Depends(get_current_user)
@@ -39,7 +56,7 @@ async def create_availability(
 
     return res.data[0]
 
-@router.get("/availability", response_model=list[AvailabilityResponse])
+@router.get("/config", response_model=list[AvailabilityResponse])
 async def list_availability(current_user: dict = Depends(get_current_user)):
     """Lista as regras de disponibilidade da semana."""
     supabase = get_supabase_admin()
@@ -48,7 +65,7 @@ async def list_availability(current_user: dict = Depends(get_current_user)):
     res = _availability_query(supabase, user_id).order('weekday').execute()
     return res.data or []
 
-@router.put("/availability/{availability_id}", response_model=AvailabilityResponse)
+@router.put("/config/{availability_id}", response_model=AvailabilityResponse)
 async def update_availability(
     availability_id: str,
     data: AvailabilityUpdate,
@@ -62,6 +79,15 @@ async def update_availability(
     if not check.data:
         raise HTTPException(status_code=404, detail="Regra não encontrada.")
 
+    existing = check.data[0]
+    effective_start = data.start_time or time.fromisoformat(existing['start_time'])
+    effective_end = data.end_time or time.fromisoformat(existing['end_time'])
+    if effective_end <= effective_start:
+        raise HTTPException(
+            status_code=400,
+            detail="Horário final deve ser maior que o horário inicial.",
+        )
+
     update_data = {}
     if data.start_time is not None:
         update_data['start_time'] = data.start_time.strftime("%H:%M:%S")
@@ -70,13 +96,19 @@ async def update_availability(
     if data.slot_duration is not None:
         update_data['slot_duration'] = data.slot_duration
 
-    res = supabase.table('availability').update(update_data).eq('id', availability_id).execute()
+    res = (
+        supabase.table('availability')
+        .update(update_data)
+        .eq('id', availability_id)
+        .eq('tenant_id', str(user_id))
+        .execute()
+    )
     if not res.data:
         raise HTTPException(status_code=500, detail="Erro ao atualizar.")
     
     return res.data[0]
 
-@router.delete("/availability/{availability_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/config/{availability_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_availability(
     availability_id: str,
     current_user: dict = Depends(get_current_user)
@@ -120,8 +152,10 @@ async def get_available_slots(
     end_time_str = rule['end_time']
     slot_minutes = rule['slot_duration']
 
-    start_dt = datetime.strptime(f"{date} {start_time_str}", "%Y-%m-%d %H:%M:%S")
-    end_dt = datetime.strptime(f"{date} {end_time_str}", "%Y-%m-%d %H:%M:%S")
+    start_time = time.fromisoformat(start_time_str)
+    end_time = time.fromisoformat(end_time_str)
+    start_dt = datetime.combine(query_date, start_time, tzinfo=_business_timezone())
+    end_dt = datetime.combine(query_date, end_time, tzinfo=_business_timezone())
 
     # 2. Gerar todos os slots possíveis
     possible_slots = []
@@ -131,14 +165,14 @@ async def get_available_slots(
         current_slot += timedelta(minutes=slot_minutes)
 
     # 3. Buscar agendamentos existentes para a data no modelo principal
-    day_start = f"{date}T00:00:00"
-    day_end = f"{query_date + timedelta(days=1)}T00:00:00"
+    day_start = datetime.combine(query_date, time.min, tzinfo=_business_timezone())
+    day_end = day_start + timedelta(days=1)
 
     appts_res = supabase.table('appointments') \
         .select('date, duration_minutes, status') \
         .eq('user_id', str(user_id)) \
-        .gte('date', day_start) \
-        .lt('date', day_end) \
+        .gte('date', _to_storage(day_start)) \
+        .lt('date', _to_storage(day_end)) \
         .neq('status', 'cancelado') \
         .execute()
     
@@ -147,7 +181,7 @@ async def get_available_slots(
     # Helper para verificação de colisão
     def is_slot_free(slot_start: datetime, slot_end: datetime) -> bool:
         for appt in appointments:
-            existing_start = datetime.fromisoformat(appt['date'].replace('Z', '+00:00')).replace(tzinfo=None)
+            existing_start = _from_storage(appt['date'])
             existing_end = existing_start + timedelta(minutes=appt.get('duration_minutes', 60) or 60)
             
             # Se colide
@@ -157,7 +191,7 @@ async def get_available_slots(
 
     # 4. Filtrar slots validos (sem colisão e no futuro caso o dia seja hoje)
     available_slots_str = []
-    now = datetime.now()
+    now = datetime.now(_business_timezone())
     
     for slot in possible_slots:
         # Ignorar slots que já passaram se for hoje

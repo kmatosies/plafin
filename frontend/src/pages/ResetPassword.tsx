@@ -1,29 +1,30 @@
-﻿import { useState, type FormEvent, useEffect } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import './Auth.css'
 
 export default function ResetPassword() {
     const navigate = useNavigate()
+    const [recoveryTokens] = useState(() => {
+        const params = new URLSearchParams(window.location.hash.slice(1))
+        if (params.get('type') !== 'recovery') return null
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+        return accessToken && refreshToken
+            ? { accessToken, refreshToken }
+            : null
+    })
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
-    const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
-    const [errorMsg, setErrorMsg] = useState<string | null>(null)
-    const [accessToken, setAccessToken] = useState<string | null>(null)
-
-    useEffect(() => {
-        const hash = window.location.hash
-        const params = new URLSearchParams(hash.slice(1))
-        const token = params.get('access_token')
-        const type = params.get('type')
-        if (token && type === 'recovery') {
-            setAccessToken(token)
-        } else {
-            setErrorMsg('Link inválido ou expirado. Solicite um novo link de recuperação.')
-            setStatus('error')
-        }
-    }, [])
+    const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>(
+        recoveryTokens ? 'idle' : 'error',
+    )
+    const [errorMsg, setErrorMsg] = useState<string | null>(
+        recoveryTokens
+            ? null
+            : 'Link inválido ou expirado. Solicite um novo link de recuperação.',
+    )
 
     async function handleSubmit(e: FormEvent) {
         e.preventDefault()
@@ -41,7 +42,8 @@ export default function ResetPassword() {
 
         try {
             await api.post('/api/auth/update-password', {
-                access_token: accessToken,
+                access_token: recoveryTokens?.accessToken,
+                refresh_token: recoveryTokens?.refreshToken,
                 new_password: password,
             })
             setStatus('success')
@@ -49,7 +51,6 @@ export default function ResetPassword() {
         } catch (err: unknown) {
             setStatus('error')
             setErrorMsg(err instanceof Error ? err.message : 'Não foi possível redefinir a senha.')
-            setStatus('idle')
         }
     }
 
@@ -126,7 +127,7 @@ export default function ResetPassword() {
                                 </div>
                             )}
 
-                            {accessToken && (
+                            {recoveryTokens && (
                                 <form className="auth-form" onSubmit={handleSubmit}>
                                     <div className="auth-field">
                                         <label htmlFor="new-password" className="auth-label">Nova senha</label>

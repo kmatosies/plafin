@@ -17,8 +17,16 @@ class FinanceAIAgent:
 
     def __init__(self):
         settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self.api_key = settings.gemini_api_key
+        self.client = None
         self.model = "gemini-2.0-flash"
+
+    def _get_client(self):
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not configured")
+        if self.client is None:
+            self.client = genai.Client(api_key=self.api_key)
+        return self.client
 
     async def _get_user_financial_data(self, user_id: str) -> dict:
         """Busca dados financeiros do usuÃ¡rio para contextualizar a IA."""
@@ -143,7 +151,7 @@ class FinanceAIAgent:
 
         prompt = prompts.get(analysis_type, prompts["full"])
 
-        response = self.client.models.generate_content(
+        response = self._get_client().models.generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -172,7 +180,7 @@ class FinanceAIAgent:
             f"Responda de forma Ãºtil e personalizada baseado nos dados reais."
         )
 
-        response = self.client.models.generate_content(
+        response = self._get_client().models.generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(

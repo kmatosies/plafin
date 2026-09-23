@@ -12,14 +12,25 @@ from supabase import create_client, Client
 
 def verify_admin():
     supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_key = os.environ.get("SUPABASE_KEY")
-    supabase_service_key = os.environ.get("SUPABASE_SERVICE_KEY")
+    supabase_key = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get(
+        "SUPABASE_KEY"
+    )
+    supabase_service_key = os.environ.get(
+        "SUPABASE_SERVICE_ROLE_KEY"
+    ) or os.environ.get("SUPABASE_SERVICE_KEY")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "CHANGE_ME_STRONG_PASSWORD")
 
     if admin_password == "CHANGE_ME_STRONG_PASSWORD":
         print("[ERRO] Defina ADMIN_PASSWORD no ambiente antes de executar a verificação.")
+        sys.exit(1)
+
+    if not supabase_url or not supabase_key or not supabase_service_key:
+        print(
+            "[ERRO] Configure SUPABASE_URL, SUPABASE_ANON_KEY e "
+            "SUPABASE_SERVICE_ROLE_KEY antes de executar."
+        )
         sys.exit(1)
 
     print(f"--- Verificando usuario: {admin_email} ---")

@@ -1,26 +1,21 @@
 # FastAPI + Server
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-python-multipart==0.0.9
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
 
 # Supabase
-supabase==2.11.0
+supabase==2.31.0
 
 # Stripe
-stripe==10.12.0
-
-# Google Gemini AI
-google-genai==1.5.0
+stripe==15.6.1
+requests==2.33.0
 
 # Utils
-python-dotenv==1.0.1
-pydantic==2.9.2
-pydantic-settings==2.5.2
-httpx>=0.28.1,<0.29.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-slowapi==0.1.9
-
-# WhatsApp (Evolution API client)
-requests==2.32.3
-aiohttp==3.10.10
+python-dotenv==1.2.3
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+dnspython==2.8.0
+httpx==0.28.1
+python-dateutil==2.9.0.post0
+tzdata==2026.4
+slowapi==0.1.10

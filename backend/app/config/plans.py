@@ -44,20 +44,6 @@ PLAN_LIMITS: dict[str, dict[str, Optional[int]]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Preços por moeda (para exibição no frontend)
-# ---------------------------------------------------------------------------
-PLAN_PRICES: dict[str, dict[str, str]] = {
-    PLAN_FREE: {
-        "BRL": "R$ 0",
-        "USD": "US$ 0",
-    },
-    PLAN_PRO: {
-        "BRL": "R$ 79,90",
-        "USD": "US$ 19,90",
-    },
-}
-
-# ---------------------------------------------------------------------------
 # Features binárias (habilitado/desabilitado) por plano
 # ---------------------------------------------------------------------------
 PLAN_FEATURES: dict[str, set[str]] = {
@@ -73,7 +59,6 @@ PLAN_FEATURES: dict[str, set[str]] = {
         "report_preview",
         "report_pdf_monthly",    # Pode gerar PDF mensal
         "history_monthly",
-        "ai_finance_advisor",
     },
     PLAN_PRO: {
         "agenda",
@@ -85,10 +70,6 @@ PLAN_FEATURES: dict[str, set[str]] = {
         "report_pdf_annual",
         "history_monthly",
         "history_annual",
-        "ai_finance_advisor",
-        "ai_finance_advanced",
-        "whatsapp_agent",
-        "whatsapp_agent_logs",
     },
 }
 
@@ -142,8 +123,6 @@ def normalize_plan(plan: str | None) -> str:
     """Normaliza planos legados para os planos públicos atuais."""
     if plan in (None, "", PLAN_FREE):
         return PLAN_FREE
-    if plan in (PLAN_STARTER, PLAN_PRO):
-        return plan
-    if plan == "enterprise":
+    if plan in (PLAN_STARTER, PLAN_PRO, "enterprise"):
         return PLAN_PRO
     return PLAN_FREE

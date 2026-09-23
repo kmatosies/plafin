@@ -5,7 +5,7 @@ Usa a API de Admin do Supabase sem depender do SDK Python (que exige JWT padrão
 
 import os
 import sys
-import requests
+import httpx
 from pathlib import Path
 
 # Carrega o .env manualmente
@@ -19,10 +19,15 @@ if env_path.exists():
                 os.environ.setdefault(key.strip(), val.strip())
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get(
+    "SUPABASE_SERVICE_KEY"
+)
 
 if not SUPABASE_URL or not SERVICE_KEY:
-    print("❌ ERRO: Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo backend/.env")
+    print(
+        "ERRO: Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY "
+        "no arquivo backend/.env"
+    )
     sys.exit(1)
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
@@ -53,7 +58,7 @@ payload = {
     }
 }
 
-resp = requests.post(create_url, json=payload, headers=headers)
+resp = httpx.post(create_url, json=payload, headers=headers, timeout=30)
 
 if resp.status_code in (200, 201):
     user_data = resp.json()
@@ -62,7 +67,11 @@ if resp.status_code in (200, 201):
 elif resp.status_code == 422 and "already" in resp.text.lower():
     print(f"⚠️ Usuário {ADMIN_EMAIL} já existe no Supabase.")
     # Buscar o ID do usuário existente
-    list_resp = requests.get(f"{SUPABASE_URL}/auth/v1/admin/users", headers=headers)
+    list_resp = httpx.get(
+        f"{SUPABASE_URL}/auth/v1/admin/users",
+        headers=headers,
+        timeout=30,
+    )
     for u in list_resp.json().get("users", []):
         if u.get("email") == ADMIN_EMAIL:
             user_id = u.get("id")
@@ -88,7 +97,12 @@ if user_id:
     }
     # Usar upsert (POST com Prefer: resolution=merge-duplicates)
     upsert_headers = {**headers, "Prefer": "resolution=merge-duplicates"}
-    upsert_resp = requests.post(profiles_url, json=profile_payload, headers=upsert_headers)
+    upsert_resp = httpx.post(
+        profiles_url,
+        json=profile_payload,
+        headers=upsert_headers,
+        timeout=30,
+    )
     
     if upsert_resp.status_code in (200, 201):
         print("✅ Perfil admin configurado no banco de dados (plano PRO, role admin)")

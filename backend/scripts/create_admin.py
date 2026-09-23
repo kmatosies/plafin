@@ -2,7 +2,7 @@
 Script de seed — Cria usuário admin no Supabase Auth.
 
 EXECUÇÃO: python backend/scripts/create_admin.py
-REQUERIMENTOS: .env configurado com SUPABASE_URL e SUPABASE_SERVICE_KEY
+REQUERIMENTOS: .env configurado com SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY
 
 ⚠️ Execute este script UMA ÚNICA VEZ em cada ambiente (local / produção).
 ⚠️ Nunca comite credenciais hardcoded no repositório.
@@ -23,10 +23,15 @@ from supabase import create_client, Client
 
 def create_admin_user():
     supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_service_key = os.environ.get("SUPABASE_SERVICE_KEY")
+    supabase_service_key = os.environ.get(
+        "SUPABASE_SERVICE_ROLE_KEY"
+    ) or os.environ.get("SUPABASE_SERVICE_KEY")
 
     if not supabase_url or not supabase_service_key:
-        print("❌ ERRO: Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo backend/.env")
+        print(
+            "ERRO: Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY "
+            "no arquivo backend/.env"
+        )
         sys.exit(1)
 
     # Credenciais do admin (defina via variáveis de ambiente ou edite aqui)

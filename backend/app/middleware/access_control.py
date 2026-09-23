@@ -10,7 +10,7 @@ Uso nos routers:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from time import monotonic
 
 from fastapi import Depends, HTTPException, status
@@ -59,7 +59,6 @@ def _fetch_user_plan_profile(user_id: str):
         supabase.table("profiles")
         .select("plan, subscription_status")
         .eq("id", user_id)
-        .single()
         .execute()
     )
 
@@ -84,9 +83,10 @@ async def _get_user_with_plan(current_user: dict = Depends(get_current_user)) ->
                         detail="Perfil de usuário não encontrado.",
                     )
 
+                profile = result.data[0]
                 cached_profile = {
-                    "plan": result.data.get("plan", PLAN_FREE),
-                    "subscription_status": result.data.get("subscription_status", "active"),
+                    "plan": profile.get("plan", PLAN_FREE),
+                    "subscription_status": profile.get("subscription_status", "active"),
                 }
                 _set_cached_user_plan(user_id, cached_profile)
 
@@ -157,7 +157,7 @@ def require_limit(metric: str, plan_limit_key: str):
         # Definir o período correto para a métrica
         period = "all"
         if "month" in metric:
-            period = datetime.utcnow().strftime("%Y-%m")
+            period = datetime.now(timezone.utc).strftime("%Y-%m")
 
         current_count = UsageService.get_counter(user_id, metric, period)
 

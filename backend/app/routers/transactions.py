@@ -6,7 +6,7 @@ Verifica limite mensal do plano ao criar nova transação.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionUpdate,
@@ -21,11 +21,25 @@ from app.services.usage_service import UsageService
 router = APIRouter(prefix="/transactions", tags=["Transações"])
 
 
+def _ensure_client_belongs_to_user(supabase, client_id: str | None, user_id: str) -> None:
+    if not client_id:
+        return
+    result = (
+        supabase.table("clients")
+        .select("id")
+        .eq("id", client_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Cliente inválido para este usuário.")
+
+
 @router.get("/", response_model=list[TransactionResponse])
 async def list_transactions(
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None),
-    type: Optional[str] = Query(None, regex="^(receita|despesa)$"),
+    type: Optional[str] = Query(None, pattern="^(receita|despesa)$"),
     status_filter: Optional[str] = Query(None, alias="status"),
     current_user: dict = Depends(get_current_user),
 ):
@@ -110,14 +124,13 @@ async def get_transaction(
         .select("*")
         .eq("id", transaction_id)
         .eq("user_id", current_user["id"])
-        .single()
         .execute()
     )
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
-    return result.data
+    return result.data[0]
 
 
 @router.post("/", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
@@ -133,6 +146,11 @@ async def create_transaction(
     transaction_data = data.model_dump()
     transaction_data["user_id"] = current_user["id"]
     transaction_data["date"] = transaction_data["date"].isoformat()
+    _ensure_client_belongs_to_user(
+        supabase,
+        transaction_data.get("client_id"),
+        current_user["id"],
+    )
 
     result = supabase.table("transactions").insert(transaction_data).execute()
 
@@ -140,7 +158,7 @@ async def create_transaction(
         raise HTTPException(status_code=500, detail="Erro ao criar transação.")
 
     # Incrementar contador do mês corrente atomicamente
-    period = datetime.utcnow().strftime("%Y-%m")
+    period = datetime.now(timezone.utc).strftime("%Y-%m")
     UsageService.increment_counter(current_user["id"], "transactions_month", period)
 
     return result.data[0]
@@ -169,11 +187,18 @@ async def update_transaction(
     update_data = data.model_dump(exclude_unset=True)
     if "date" in update_data and update_data["date"]:
         update_data["date"] = update_data["date"].isoformat()
+    if "client_id" in update_data:
+        _ensure_client_belongs_to_user(
+            supabase,
+            update_data["client_id"],
+            current_user["id"],
+        )
 
     result = (
         supabase.table("transactions")
         .update(update_data)
         .eq("id", transaction_id)
+        .eq("user_id", current_user["id"])
         .execute()
     )
 
@@ -198,7 +223,13 @@ async def delete_transaction(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
-    supabase.table("transactions").delete().eq("id", transaction_id).execute()
+    (
+        supabase.table("transactions")
+        .delete()
+        .eq("id", transaction_id)
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
 
     # Decrementar o contador do mês da transação deletada
     tx_date = existing.data[0].get("date", "")

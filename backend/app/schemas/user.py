@@ -2,7 +2,7 @@
 Schemas Pydantic para o modelo User/Profile.
 """
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
@@ -11,22 +11,31 @@ from datetime import datetime
 
 class UserRegister(BaseModel):
     """Dados para registro de novo usuário."""
-    email: str
-    password: str
-    full_name: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=2, max_length=120)
     phone: Optional[str] = None
     business_name: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     """Dados para login."""
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
 
 
 class PasswordReset(BaseModel):
     """Dados para reset de senha."""
-    email: str
+    email: EmailStr
+
+
+class PasswordUpdate(BaseModel):
+    """Tokens da recuperação e nova senha."""
+    access_token: str = Field(min_length=1)
+    refresh_token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 # --- Profile ---

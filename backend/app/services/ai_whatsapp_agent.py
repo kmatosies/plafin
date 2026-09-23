@@ -16,11 +16,19 @@ class WhatsAppAIAgent:
 
     def __init__(self):
         settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self.api_key = settings.gemini_api_key
+        self.client = None
         self.model = "gemini-2.0-flash"
         self.evolution_url = settings.evolution_api_url
         self.evolution_key = settings.evolution_api_key
         self.evolution_instance = settings.evolution_instance
+
+    def _get_client(self):
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not configured")
+        if self.client is None:
+            self.client = genai.Client(api_key=self.api_key)
+        return self.client
 
     async def send_whatsapp_message(self, phone: str, message: str) -> dict:
         """Envia mensagem pelo WhatsApp via Evolution API."""
@@ -107,7 +115,7 @@ class WhatsAppAIAgent:
             f"Responda de forma profissional, simpática e objetiva."
         )
 
-        response = self.client.models.generate_content(
+        response = self._get_client().models.generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(

@@ -3,18 +3,20 @@ Router de assinaturas (Stripe).
 Expõe o contrato usado pelo frontend para status, checkout e portal.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Literal
 from app.middleware.auth import get_current_user
 from app.services.stripe_service import (
     create_checkout_session,
     create_portal_session,
-    handle_webhook_event,
 )
 from app.config.plans import PLAN_FREE, PLAN_PRO, PLAN_LIMITS, PLAN_FEATURES, normalize_plan
 
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
+logger = logging.getLogger("plafin.subscriptions")
 
 
 class CheckoutRequest(BaseModel):
@@ -52,22 +54,22 @@ async def get_subscription_status(
     """Retorna o status atual da assinatura do usuário autenticado."""
     from app.database import get_supabase_admin
     from app.services.usage_service import UsageService
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     supabase = get_supabase_admin()
     profile = (
         supabase.table("profiles")
         .select("plan, subscription_status, subscription_expires_at, stripe_subscription_id")
         .eq("id", current_user["id"])
-        .single()
         .execute()
     )
 
     if not profile.data:
         raise HTTPException(status_code=404, detail="Perfil não encontrado.")
 
-    plan = normalize_plan(profile.data.get("plan", PLAN_FREE))
-    period = datetime.utcnow().strftime("%Y-%m")
+    profile_data = profile.data[0]
+    plan = normalize_plan(profile_data.get("plan", PLAN_FREE))
+    period = datetime.now(timezone.utc).strftime("%Y-%m")
 
     # Buscar contadores de uso
     clients_count = UsageService.get_counter(current_user["id"], "clients_total", "all")
@@ -77,9 +79,9 @@ async def get_subscription_status(
 
     return {
         "plan": plan,
-        "subscription_status": profile.data.get("subscription_status", "active"),
-        "subscription_expires_at": profile.data.get("subscription_expires_at"),
-        "stripe_subscription_id": profile.data.get("stripe_subscription_id"),
+        "subscription_status": profile_data.get("subscription_status", "active"),
+        "subscription_expires_at": profile_data.get("subscription_expires_at"),
+        "stripe_subscription_id": profile_data.get("stripe_subscription_id"),
         "limits": PLAN_LIMITS.get(plan, PLAN_LIMITS[PLAN_FREE]),
         "features": sorted(list(PLAN_FEATURES.get(plan, PLAN_FEATURES[PLAN_FREE]))),
         "usage": {
@@ -91,7 +93,7 @@ async def get_subscription_status(
 
 
 @router.post("/create-checkout")
-async def create_checkout(
+def create_checkout(
     data: CheckoutRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -107,12 +109,12 @@ async def create_checkout(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao criar checkout: {str(e)}")
-
+    except Exception:
+        logger.exception("Failed to create Stripe Checkout Session")
+        raise HTTPException(status_code=502, detail="Servico de pagamento indisponivel.")
 
 @router.post("/portal")
-async def customer_portal(
+def customer_portal(
     current_user: dict = Depends(get_current_user),
 ):
     """Cria sessão do portal do cliente para gerenciar assinatura."""
@@ -122,25 +124,6 @@ async def customer_portal(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao criar portal: {str(e)}")
-
-
-@router.post("/webhook")
-async def stripe_webhook(request: Request):
-    """
-    Recebe eventos de webhook do Stripe.
-    Configure o endpoint no Dashboard do Stripe:
-    POST https://seudominio.com/api/subscriptions/webhook
-    """
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature", "")
-
-    try:
-        result = handle_webhook_event(payload, sig_header)
-        return {"status": "ok", **result}
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no webhook: {str(e)}")
+    except Exception:
+        logger.exception("Failed to create Stripe Customer Portal Session")
+        raise HTTPException(status_code=502, detail="Servico de pagamento indisponivel.")

@@ -3,7 +3,7 @@ Serviço de controle de uso e limites dos planos.
 Centraliza a lógica de incremento de contadores e verificação de limites.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from app.database import get_supabase_admin
 from app.config.plans import get_limit, PLAN_FREE
@@ -18,7 +18,7 @@ class UsageService:
     @staticmethod
     def _get_month_period(dt: Optional[datetime] = None) -> str:
         """Retorna a chave de período no formato YYYY-MM."""
-        target = dt or datetime.utcnow()
+        target = dt or datetime.now(timezone.utc)
         return target.strftime("%Y-%m")
 
     @staticmethod
@@ -34,7 +34,7 @@ class UsageService:
             .maybe_single()
             .execute()
         )
-        if result.data:
+        if result is not None and result.data:
             return result.data.get("current_value", 0)
         return 0
 
@@ -128,7 +128,7 @@ class UsageService:
                 "metric": "clients_total",
                 "period": "all",
                 "current_value": real_count,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             on_conflict="user_id,metric,period",
         ).execute()

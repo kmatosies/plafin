@@ -2,7 +2,7 @@
 Schemas Pydantic para transações financeiras.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Literal
 from datetime import date, datetime
 
@@ -40,12 +40,11 @@ class TransactionUpdate(BaseModel):
 
 class TransactionResponse(TransactionBase):
     """Resposta com dados completos da transação."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class FinancialSummary(BaseModel):
