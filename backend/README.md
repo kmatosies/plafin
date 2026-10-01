@@ -36,18 +36,24 @@ uvicorn app.main:app --reload --port 8000
 python -m pytest
 ```
 
-O teste de integracao com Supabase local e opt-in:
+O teste de integracao com Supabase local e opt-in e cria usuarios e dados.
+Antes de executa-lo, confirme um projeto local exclusivo e descartavel na URL
+exata `http://127.0.0.1:54321`, com worker desativado e plano de cleanup.
+Nao use stack compartilhada nem remota. O guard do teste rejeita outros destinos,
+mas nao comprova sozinho a identidade dos volumes locais.
 
 ```powershell
-$env:RUN_SUPABASE_INTEGRATION='1'
-python -m pytest tests/test_supabase_integration.py
+$env:RUN_LOCAL_INTEGRATION='1'
+$env:PLAFIN_TEST_STACK_DISPOSABLE='1'
+$env:ENABLE_NOTIFICATION_WORKER='false'
+python -m pytest tests/integration/test_local_stack.py -q
 ```
 
 ## Docker
 
 ```powershell
-docker build -t plafin-backend:local backend
-docker run --rm -p 8000:8000 --env-file backend/.env plafin-backend:local
+docker build -t plafin-backend:local .
+docker run --rm -p 127.0.0.1:8000:8000 -e ENABLE_NOTIFICATION_WORKER=false plafin-backend:local
 ```
 
 A imagem roda como usuario nao-root, respeita `PORT` e possui health check.
@@ -68,4 +74,5 @@ test mode e o Price selecionado deve ser mensal e em BRL.
 As integracoes de IA ficam em `requirements-phase2.txt` e nao fazem parte da
 imagem de producao atual.
 
-Veja `../docs/deploy.md` e os relatorios do Ciclo 02 em `../gestao/`.
+Veja `../docs/deploy.md` e os relatorios dos ciclos no diretorio `Gestão/`
+do checkout principal.
