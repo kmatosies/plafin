@@ -3,7 +3,7 @@ Schemas Pydantic para agendamentos.
 Aceitam o contrato usado pelo frontend e persistem no modelo principal do backend.
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Optional, Literal
 from datetime import datetime, date, time
 
@@ -30,6 +30,13 @@ class AppointmentUpdate(BaseModel):
     notes: Optional[str] = None
     title: Optional[str] = None
     value: Optional[float] = None
+
+    @model_validator(mode="after")
+    def reject_null_required_fields(self):
+        for name in ("date", "start_time", "end_time", "status"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} não pode ser nulo")
+        return self
 
 
 class AppointmentResponse(BaseModel):

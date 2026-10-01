@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.routers import appointments
-from app.schemas.availability import AvailabilityCreate
+from app.schemas.availability import AvailabilityCreate, AvailabilityUpdate
+from app.schemas.appointment import AppointmentUpdate
 
 
 class _AppointmentQuery:
@@ -105,3 +106,21 @@ def test_availability_rejects_invalid_window() -> None:
             end_time=time(9, 0),
             slot_duration=30,
         )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"slot_duration": 0}, {"slot_duration": -5}, {"slot_duration": None}, {"start_time": None}, {"end_time": None}],
+)
+def test_availability_patch_rejects_invalid_required_values(payload: dict) -> None:
+    with pytest.raises(ValidationError):
+        AvailabilityUpdate(**payload)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"date": None}, {"start_time": None}, {"end_time": None}, {"status": None}],
+)
+def test_appointment_patch_rejects_null_required_values(payload: dict) -> None:
+    with pytest.raises(ValidationError):
+        AppointmentUpdate(**payload)

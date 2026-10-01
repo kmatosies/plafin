@@ -21,7 +21,14 @@ class AvailabilityCreate(AvailabilityBase):
 class AvailabilityUpdate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
-    slot_duration: Optional[int] = None
+    slot_duration: Optional[int] = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def reject_null_required_fields(self):
+        for name in ("start_time", "end_time", "slot_duration"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} não pode ser nulo")
+        return self
 
 class AvailabilityResponse(AvailabilityBase):
     model_config = ConfigDict(from_attributes=True)

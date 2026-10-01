@@ -12,7 +12,9 @@ Dados agregados para o painel principal.
 import logging
 import time
 from fastapi import APIRouter, Depends, Query, HTTPException, status
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from app.config import get_settings
 from app.middleware.auth import get_current_user
 from app.database import get_supabase_admin
 
@@ -32,12 +34,12 @@ async def get_dashboard_data(
     agendamentos de hoje e alertas.
     """
     t_start = time.perf_counter()
-    supabase = get_supabase_admin()
     user_id = current_user["id"]
 
     logger.info(f"Dashboard solicitado por user={user_id} | mês={month}/{year}")
 
     try:
+        supabase = get_supabase_admin()
         # --- Período do mês ---
         start_date = date(year, month, 1).isoformat()
         if month == 12:
@@ -93,17 +95,19 @@ async def get_dashboard_data(
         active_clients = clients_result.count or 0
 
         # --- Agendamentos de hoje ---
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        today_start = f"{today_str}T00:00:00"
-        today_end = f"{today_str}T23:59:59"
+        business_tz = ZoneInfo(get_settings().business_timezone)
+        today = datetime.now(business_tz).date()
+        today_str = today.isoformat()
+        today_start = datetime.combine(today, datetime.min.time(), tzinfo=business_tz)
+        tomorrow_start = today_start + timedelta(days=1)
 
         today_apts_result = (
             supabase.table("appointments")
             # FIX: campo correto é "full_name", não "name"
             .select("*, clients(name)")
             .eq("user_id", user_id)
-            .gte("date", today_start)
-            .lte("date", today_end)
+            .gte("date", today_start.astimezone(timezone.utc).isoformat())
+            .lt("date", tomorrow_start.astimezone(timezone.utc).isoformat())
             .order("date")
             .execute()
         )
@@ -118,7 +122,7 @@ async def get_dashboard_data(
         logger.info(f"Agendamentos hoje: {len(appointments_today)}")
 
         # --- Alertas (vencimentos próximos 7 dias) ---
-        next_week = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        next_week = (today + timedelta(days=7)).isoformat()
 
         alerts_result = (
             supabase.table("transactions")
@@ -149,11 +153,10 @@ async def get_dashboard_data(
             "upcoming_alerts": alerts_result.data or [],
         }
 
-    except Exception as e:
-        # 🛠 DEBUG: log completo do erro para facilitar diagnóstico
-        logger.error(f"Erro ao gerar dashboard para user={user_id}: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("Erro ao gerar dashboard para user=%s; tipo=%s", user_id, type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno ao carregar o dashboard: {str(e)}",
-        )
+            detail="Erro interno ao carregar o dashboard.",
+        ) from None
 
