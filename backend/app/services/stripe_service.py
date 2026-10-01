@@ -76,7 +76,10 @@ def _get_profile_by_user_id(user_id: str) -> dict[str, Any] | None:
     supabase = get_supabase_admin()
     result = (
         supabase.table("profiles")
-        .select("id, plan, stripe_customer_id, stripe_subscription_id, stripe_price_id")
+        .select(
+            "id, plan, subscription_status, stripe_customer_id, "
+            "stripe_subscription_id, stripe_price_id"
+        )
         .eq("id", user_id)
         .maybe_single()
         .execute()
@@ -118,10 +121,28 @@ def _mark_event_failed(event_id: str, message: str) -> None:
     ).eq("id", event_id).execute()
 
 
-def _update_profile_subscription(user_id: str, update_data: dict[str, Any]) -> None:
+def _update_profile_subscription(
+    user_id: str,
+    update_data: dict[str, Any],
+    *,
+    expected_customer_id: str | None,
+    expected_subscription_id: str | None,
+) -> bool:
+    """Update only the billing binding that was read before processing the event."""
     supabase = get_supabase_admin()
-    supabase.table("profiles").update(update_data).eq("id", user_id).execute()
-    invalidate_user_plan_cache(user_id)
+    query = supabase.table("profiles").update(update_data).eq("id", user_id)
+    if expected_customer_id is None:
+        query = query.is_("stripe_customer_id", "null")
+    else:
+        query = query.eq("stripe_customer_id", expected_customer_id)
+    if expected_subscription_id is None:
+        query = query.is_("stripe_subscription_id", "null")
+    else:
+        query = query.eq("stripe_subscription_id", expected_subscription_id)
+    updated = query.select("id").execute().data
+    if updated:
+        invalidate_user_plan_cache(user_id)
+    return bool(updated)
 
 
 def _resolve_user_id_from_sources(
@@ -137,6 +158,10 @@ def _resolve_user_id_from_sources(
         if metadata_user_id and metadata_user_id != profile["id"]:
             raise ValueError("Stripe customer and metadata user do not match.")
         return profile["id"]
+    if metadata_user_id:
+        metadata_profile = _get_profile_by_user_id(metadata_user_id)
+        if not metadata_profile or metadata_profile.get("stripe_customer_id") != customer_id:
+            raise ValueError("Stripe metadata user is not bound to the customer.")
     return metadata_user_id
 
 
@@ -156,8 +181,26 @@ def _sync_subscription_state(
     status: str | None,
     current_period_end: int | None,
     price_id: str | None,
+    allow_rebind_after_cancel: bool = False,
 ) -> dict[str, Any]:
+    if not customer_id or not subscription_id:
+        raise ValueError("Stripe event has no verifiable customer/subscription binding.")
     current_profile = _get_profile_by_user_id(user_id) or {}
+    bound_customer_id = current_profile.get("stripe_customer_id")
+    bound_subscription_id = current_profile.get("stripe_subscription_id")
+    if not current_profile:
+        raise ValueError("Stripe event user has no profile.")
+    if bound_customer_id and customer_id != bound_customer_id:
+        raise ValueError("Stripe event customer differs from the current profile.")
+    if bound_subscription_id and subscription_id != bound_subscription_id:
+        raise ValueError("Stripe event subscription differs from the current profile.")
+    if (
+        not bound_subscription_id
+        and current_profile.get("subscription_status") == "canceled"
+        and status != "canceled"
+        and not allow_rebind_after_cancel
+    ):
+        raise ValueError("Canceled subscription requires a verified new checkout or reconciliation.")
     effective_status = _normalize_subscription_status(status)
 
     if effective_status == "canceled":
@@ -170,11 +213,6 @@ def _sync_subscription_state(
         effective_plan = _price_to_plan(price_id)
     else:
         effective_plan = _price_to_plan(price_id)
-    if not customer_id:
-        customer_id = current_profile.get("stripe_customer_id")
-    if not subscription_id and effective_status != "canceled":
-        subscription_id = current_profile.get("stripe_subscription_id")
-
     update_data = {
         "plan": effective_plan,
         "stripe_customer_id": customer_id,
@@ -183,7 +221,13 @@ def _sync_subscription_state(
         "subscription_status": effective_status,
         "subscription_expires_at": _to_iso8601(current_period_end),
     }
-    _update_profile_subscription(user_id, update_data)
+    if not _update_profile_subscription(
+        user_id,
+        update_data,
+        expected_customer_id=bound_customer_id,
+        expected_subscription_id=bound_subscription_id,
+    ):
+        raise ValueError("Stripe subscription binding changed; reconciliation required.")
     return update_data
 
 
@@ -324,6 +368,8 @@ def _handle_checkout_session_completed(event: dict[str, Any]) -> dict[str, Any]:
 
     if subscription_id:
         subscription = _get_stripe_client().v1.subscriptions.retrieve(subscription_id)
+        if subscription.get("customer") != customer_id:
+            raise ValueError("Checkout customer and subscription customer do not match.")
         price_id = _extract_price_id_from_subscription(subscription)
         status = subscription.get("status")
         current_period_end = subscription.get("current_period_end")
@@ -337,6 +383,7 @@ def _handle_checkout_session_completed(event: dict[str, Any]) -> dict[str, Any]:
         status=status,
         current_period_end=current_period_end,
         price_id=price_id,
+        allow_rebind_after_cancel=True,
     )
     return {"action": "checkout_session_completed", "user_id": user_id, "profile": update_data}
 
@@ -345,11 +392,11 @@ def _handle_invoice_payment_succeeded(event: dict[str, Any]) -> dict[str, Any]:
     invoice = event["data"]["object"]
     customer_id = invoice.get("customer")
     subscription_id = invoice.get("subscription")
-    subscription = (
-        _get_stripe_client().v1.subscriptions.retrieve(subscription_id)
-        if subscription_id
-        else None
-    )
+    if not subscription_id:
+        raise ValueError("invoice.payment_succeeded sem subscription verificável.")
+    subscription = _get_stripe_client().v1.subscriptions.retrieve(subscription_id)
+    if subscription.get("customer") != customer_id:
+        raise ValueError("Invoice customer and subscription customer do not match.")
 
     user_id = _resolve_user_id_from_sources(
         customer_id=customer_id,
@@ -358,18 +405,9 @@ def _handle_invoice_payment_succeeded(event: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         raise ValueError("invoice.payment_succeeded sem vínculo com usuário.")
 
-    price_id = None
-    current_period_end = None
-    status = "active"
-    if subscription:
-        price_id = _extract_price_id_from_subscription(subscription)
-        current_period_end = subscription.get("current_period_end")
-        status = subscription.get("status")
-    else:
-        lines = invoice.get("lines", {}).get("data", [])
-        if lines:
-            price_id = (lines[0].get("price") or {}).get("id")
-            current_period_end = (lines[0].get("period") or {}).get("end")
+    price_id = _extract_price_id_from_subscription(subscription)
+    current_period_end = subscription.get("current_period_end")
+    status = subscription.get("status")
 
     update_data = _sync_subscription_state(
         user_id=user_id,
@@ -385,18 +423,32 @@ def _handle_invoice_payment_succeeded(event: dict[str, Any]) -> dict[str, Any]:
 def _handle_invoice_payment_failed(event: dict[str, Any]) -> dict[str, Any]:
     invoice = event["data"]["object"]
     customer_id = invoice.get("customer")
+    subscription_id = invoice.get("subscription")
+    if not subscription_id:
+        raise ValueError("invoice.payment_failed sem subscription verificável.")
     profile = _get_profile_by_customer_id(customer_id)
     if not profile:
         raise ValueError("invoice.payment_failed sem customer conhecido.")
 
+    if profile.get("stripe_subscription_id") != subscription_id:
+        return {"action": "invoice_payment_failed_ignored", "user_id": profile["id"]}
     update_data = {"subscription_status": "past_due"}
-    _update_profile_subscription(profile["id"], update_data)
+    if not _update_profile_subscription(
+        profile["id"],
+        update_data,
+        expected_customer_id=customer_id,
+        expected_subscription_id=subscription_id,
+    ):
+        raise ValueError("Stripe subscription binding changed; reconciliation required.")
     return {"action": "invoice_payment_failed", "user_id": profile["id"], "profile": update_data}
 
 
 def _handle_subscription_upsert(event: dict[str, Any]) -> dict[str, Any]:
     subscription = event["data"]["object"]
     customer_id = subscription.get("customer")
+    subscription_id = subscription.get("id")
+    if not customer_id or not subscription_id:
+        raise ValueError("Subscription event has no customer/subscription binding.")
     user_id = _resolve_user_id_from_sources(
         customer_id=customer_id,
         subscription_data=subscription,
@@ -404,13 +456,19 @@ def _handle_subscription_upsert(event: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         raise ValueError(f"{event['type']} sem vínculo com usuário.")
 
-    price_id = _extract_price_id_from_subscription(subscription)
+    canonical = _get_stripe_client().v1.subscriptions.retrieve(subscription_id)
+    if canonical.get("id") != subscription_id or canonical.get("customer") != customer_id:
+        raise ValueError("Subscription event differs from canonical Stripe subscription.")
+    status = canonical.get("status")
+    if not status:
+        raise ValueError("Canonical Stripe subscription has no status.")
+    price_id = _extract_price_id_from_subscription(canonical)
     update_data = _sync_subscription_state(
         user_id=user_id,
         customer_id=customer_id,
-        subscription_id=subscription.get("id"),
-        status=subscription.get("status"),
-        current_period_end=subscription.get("current_period_end"),
+        subscription_id=subscription_id,
+        status=status,
+        current_period_end=canonical.get("current_period_end"),
         price_id=price_id,
     )
     return {"action": "subscription_upserted", "user_id": user_id, "profile": update_data}
@@ -425,6 +483,10 @@ def _handle_subscription_deleted(event: dict[str, Any]) -> dict[str, Any]:
     )
     if not user_id:
         raise ValueError("customer.subscription.deleted sem vínculo com usuário.")
+
+    profile = _get_profile_by_user_id(user_id)
+    if not profile or profile.get("stripe_subscription_id") != subscription.get("id"):
+        return {"action": "subscription_deleted_ignored", "user_id": user_id}
 
     update_data = _sync_subscription_state(
         user_id=user_id,
