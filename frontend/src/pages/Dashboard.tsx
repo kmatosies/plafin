@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     Plus, TrendingUp, TrendingDown, Wallet, AlertTriangle,
-    ArrowRight, Sparkles, Calendar, Users, Loader2, RefreshCw,
+    Calendar, Users, Loader2, RefreshCw,
     CheckCircle, Clock
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -328,8 +328,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* ── Alertas de vencimento + AI Insights ──────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: pending > 0 ? '1fr 1fr' : '1fr', gap: 18 }}>
+            {/* ── Alertas de vencimento ──────────────────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
 
                 {/* Alertas (só exibe se houver) */}
                 {(data?.upcoming_alerts?.length ?? 0) > 0 && (
@@ -352,55 +352,6 @@ export default function Dashboard() {
                         </div>
                     </div>
                 )}
-
-                {/* AI Insights */}
-                <div className="card" style={{ overflow: 'hidden', borderColor: 'var(--brand-green)' }}>
-                    <div style={{ height: 4, background: 'var(--brand-green)' }} />
-                    <div style={{ padding: '20px 24px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                            <div style={{ background: 'var(--accent-soft)', padding: 8, borderRadius: 8, display: 'flex', color: 'var(--brand-green)' }}>
-                                <Sparkles size={18} />
-                            </div>
-                            <div>
-                                <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Plafin AI Insights</h2>
-                                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Recomendações baseadas nos dados do mês.</p>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
-                                <h3 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6 }}>
-                                    Situação do Caixa
-                                </h3>
-                                <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
-                                    {netProfit >= 0
-                                        ? <><strong style={{ color: 'var(--success)' }}>Saldo Positivo </strong> — Receitas estão cobrindo as despesas. Saldo líquido de <strong>R$ {fmt(netProfit)}</strong>.</>
-                                        : <><strong style={{ color: 'var(--danger)' }}>Atenção! </strong> — Despesas superam as receitas. Déficit de <strong>R$ {fmt(Math.abs(netProfit))}</strong> neste mês.</>
-                                    }
-                                </p>
-                            </div>
-                            {pending > 0 && (
-                                <div style={{ background: 'var(--warning-soft)', border: '1px solid var(--warning)', borderRadius: 10, padding: '14px 16px' }}>
-                                    <h3 style={{ fontSize: 11, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <AlertTriangle size={13} /> Oportunidade
-                                    </h3>
-                                    <p style={{ fontSize: 13, color: '#78350f', lineHeight: 1.6 }}>
-                                        Você possui <strong>R$ {fmt(pending)}</strong> em contas pendentes. Enviar lembretes pode aumentar seu fluxo de caixa.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 10 }}>
-                            <button className="btn btn-primary" style={{ fontSize: 13 }}>
-                                Agir Agora <ArrowRight size={14} />
-                            </button>
-                            <button className="btn btn-outline" style={{ fontSize: 13 }}>
-                                Ver Análise Completa
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     )

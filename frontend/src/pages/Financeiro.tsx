@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { TrendingUp, TrendingDown, Wallet, Plus, Filter, DollarSign, ShoppingCart, Layers, X, AlertTriangle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import UpgradeCard from '../components/UpgradeCard'
-import AIInsights from '../components/AIInsights'
-import { Sparkles } from 'lucide-react'
 import { transactionsApi, clientsApi, type Transaction, type TransactionCreate, type FinancialSummary, type Client } from '../lib/api'
 
 // Mini bar chart CSS-based
@@ -231,7 +229,6 @@ const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Jul
 export default function Financeiro() {
     const { upgrade, showUpgrade, hideUpgrade, locale, subscription } = useAuth()
     const [showModal, setShowModal] = useState(false)
-    const [showAI, setShowAI] = useState(false)
 
     // Mês/Ano selecionado
     const now = new Date()
@@ -307,7 +304,6 @@ export default function Financeiro() {
             {/* Modais */}
             {upgrade.visible && <UpgradeCard limitType={upgrade.limitType} limit={upgrade.limit} locale={locale} onDismiss={hideUpgrade} />}
             {showModal && <TransactionModal onClose={() => setShowModal(false)} onCreated={fetchData} clients={clients} />}
-            {showAI && <AIInsights onClose={() => setShowAI(false)} />}
 
             {/* Cabeçalho */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: nearLimit || atLimit ? 16 : 32, flexWrap: 'wrap', gap: 12 }}>
@@ -316,10 +312,6 @@ export default function Financeiro() {
                     <p style={{ fontSize: 14, color: 'var(--text-2)' }}>Gerencie suas receitas, despesas e fluxo de caixa.</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <button onClick={() => setShowAI(true)} className="btn btn-outline" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)', borderColor: 'var(--primary-soft)', color: 'var(--primary)', fontWeight: 700 }}>
-                        <Sparkles size={16} />
-                        Consultor IA
-                    </button>
                     <button className="btn btn-outline" onClick={() => setShowFilter(f => !f)}>
                         <Filter size={16} />
                         Filtrar

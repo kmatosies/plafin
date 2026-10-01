@@ -72,7 +72,7 @@ export default function Login() {
 
                             <ul className="auth-side-features">
                                 {[
-                                    { icon: '•', text: 'Dashboard com IA integrada' },
+                                    { icon: '•', text: 'Dashboard financeiro' },
                                     { icon: '•', text: 'Agenda inteligente' },
                                     { icon: '•', text: 'Gestão de pagamentos' },
                                     { icon: '•', text: 'CRM de clientes' },

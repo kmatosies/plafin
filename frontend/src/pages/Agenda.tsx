@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Filter, Bot, CalendarDays, CalendarRange, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Filter, CalendarDays, CalendarRange, Loader2 } from 'lucide-react'
 import { appointmentsApi, clientsApi } from '../lib/api'
 import type { Appointment, Client } from '../lib/api'
 
@@ -473,19 +473,6 @@ export default function Agenda() {
                         ))
                     )}
 
-                    {/* IA Sugestão */}
-                    <div style={{ background: 'var(--primary-soft)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '14px 16px', marginTop: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--brand-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Bot size={14} color="#fff" />
-                            </div>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand-navy)' }}>IA Sugestão</span>
-                        </div>
-                        <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                            Baseado no histórico do mês passado, as <strong>terças e quintas</strong> são seus dias mais produtivos.
-                            Tente agrupar consultorias nestes dias.
-                        </p>
-                    </div>
                 </div>
             </div>
 

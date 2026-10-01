@@ -61,8 +61,6 @@ export const translations = {
             subtitle: 'Gerencie o plano da sua clínica e libere novas funcionalidades.',
             currencyLabel: 'Moeda:',
             currentPlan: 'Plano Atual',
-            whatsappExclusiveTitle: 'Exclusivo Pro: Automação via WhatsApp',
-            whatsappExclusiveSubtitle: 'Lembretes e cobranças automáticas para seus clientes.',
             free: {
                 name: 'Free',
                 period: '/mês',
@@ -85,8 +83,6 @@ export const translations = {
                     'Transações ilimitadas',
                     'Dashboard avançado + BI',
                     'Relatórios PDF (mensal e anual)',
-                    'IA Financeira Avançada',
-                    'Agente WhatsApp',
                     'Suporte prioritário 24/7',
                 ],
                 buttonText: 'Assinar Pro',
@@ -105,8 +101,6 @@ export const translations = {
             proMessage: 'Faça upgrade para o Pro e tenha acesso ilimitado a todas as funcionalidades.',
             benefits: [
                 'Clientes e transações ilimitados',
-                'IA Financeira avançada',
-                'Agente WhatsApp para agendamentos',
                 'Suporte prioritário 24/7',
             ],
             startingAt: 'A partir de',
@@ -184,8 +178,6 @@ export const translations = {
             subtitle: 'Manage your clinic plan and unlock new features.',
             currencyLabel: 'Currency:',
             currentPlan: 'Current Plan',
-            whatsappExclusiveTitle: 'Pro Exclusive: WhatsApp Automation',
-            whatsappExclusiveSubtitle: 'Automatic reminders and billing follow-ups for your clients.',
             free: {
                 name: 'Free',
                 period: '/month',
@@ -208,8 +200,6 @@ export const translations = {
                     'Unlimited transactions',
                     'Advanced dashboard + BI',
                     'PDF reports (monthly & annual)',
-                    'Advanced AI Financial Advisor',
-                    'WhatsApp Agent',
                     '24/7 priority support',
                 ],
                 buttonText: 'Subscribe to Pro',
@@ -228,8 +218,6 @@ export const translations = {
             proMessage: 'Upgrade to Pro for unlimited access to all features.',
             benefits: [
                 'Unlimited clients & transactions',
-                'Advanced AI financial insights',
-                'WhatsApp booking agent',
                 '24/7 priority support',
             ],
             startingAt: 'Starting at',
