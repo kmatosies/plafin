@@ -248,10 +248,8 @@ function CardMenu({ onEdit, onToggleStatus, onDelete, isActive }: { onEdit: () =
 }
 
 // ─── Componente Principal ────────────────────────────────────────────────
-const FREE_CLIENT_LIMIT = 20
-
 export default function Clientes() {
-    const { upgrade, showUpgrade, hideUpgrade, locale, subscription } = useAuth()
+    const { upgrade, hideUpgrade, locale } = useAuth()
     const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(true)
     const [apiError, setApiError] = useState<string | null>(null)
@@ -264,17 +262,17 @@ export default function Clientes() {
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 6
 
-    const clientLimit = subscription?.limits.max_clients ?? FREE_CLIENT_LIMIT
-    const isFreePlan = (subscription?.plan ?? 'free') === 'free'
-    const atLimit = isFreePlan && clientLimit !== null && clients.length >= clientLimit
-    const nearLimit = isFreePlan && clientLimit !== null && clients.length >= Math.max(clientLimit - 3, 0)
+    const activeClients = clients.filter(c => !c.archived).length
 
     const fetchClients = useCallback(async () => {
         setLoading(true)
         setApiError(null)
         try {
-            const data = await clientsApi.list()
-            setClients(Array.isArray(data) ? data : [])
+            const [active, archived] = await Promise.all([
+                clientsApi.list(undefined, false),
+                clientsApi.list(undefined, true),
+            ])
+            setClients([...active, ...archived])
         } catch (err: unknown) {
             console.error('Erro ao buscar clientes:', err)
             setApiError('Não foi possível carregar os clientes. Verifique se o backend está rodando.')
@@ -287,7 +285,6 @@ export default function Clientes() {
     useEffect(() => { fetchClients() }, [fetchClients])
 
     const handleNewClient = () => {
-        if (atLimit) { showUpgrade('clients', clientLimit ?? FREE_CLIENT_LIMIT); return }
         setEditingClient(null)
         setShowModal(true)
     }
@@ -303,10 +300,14 @@ export default function Clientes() {
     const totalPages = Math.ceil(filtered.length / itemsPerPage)
     const paginatedClients = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
+    useEffect(() => {
+        if (currentPage > Math.max(totalPages, 1)) setCurrentPage(Math.max(totalPages, 1))
+    }, [currentPage, totalPages])
+
     const handleSearch = (value: string) => { setSearch(value); setCurrentPage(1) }
     const handleFilter = (value: 'todos' | 'ativo' | 'inativo') => { setFilter(value); setCurrentPage(1) }
 
-    const ativos = clients.filter(c => c.status === 'ativo').length
+    const ativos = activeClients
     const totalReceita = clients.reduce((s, c) => s + (c.total_spent ?? 0), 0)
     const totalSessoes = clients.reduce((s, c) => s + (c.total_sessions ?? 0), 0)
     const ticketMedio = Math.round(totalReceita / (clients.length || 1))
@@ -367,24 +368,12 @@ export default function Clientes() {
                     <p className="page-subtitle">Gerencie sua base de contatos e acompanhe o histórico financeiro</p>
                 </div>
                 <button
-                    className={`btn ${atLimit ? 'btn-outline' : 'btn-primary'}`}
+                    className="btn btn-primary"
                     onClick={handleNewClient}
-                    style={atLimit ? { borderColor: '#F59E0B', color: '#92400E', background: '#FFFBEB' } : {}}
                 >
-                    <Plus size={15} /> {atLimit ? 'Limite Atingido — Upgrade' : 'Novo Cliente'}
+                    <Plus size={15} /> Novo Cliente
                 </button>
             </div>
-
-            {/* Banner aviso */}
-            {nearLimit && !atLimit && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#92400E', fontWeight: 500 }}>
-                    <AlertTriangle size={16} color="#F59E0B" style={{ flexShrink: 0 }} />
-                    <span>
-                        Você está usando <strong>{clients.length}/{clientLimit}</strong> clientes.{' '}
-                        <button onClick={() => showUpgrade('clients', clientLimit ?? FREE_CLIENT_LIMIT)} style={{ background: 'none', border: 'none', color: '#D97706', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit', fontSize: 13 }}>Faça upgrade para Pro</button>.
-                    </span>
-                </div>
-            )}
 
             {/* KPI Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }} className="clients-kpi-grid">

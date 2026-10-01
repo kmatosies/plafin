@@ -74,25 +74,16 @@ const navBtnStyle: React.CSSProperties = {
 
 /* ─── Modal de Novo Evento ───────────────────────────────────────────── */
 function EventModal({ onClose, onSuccess, clients }: { onClose: () => void, onSuccess: () => void, clients: Client[] }) {
-    // Como os endpoints pedem clientId, apenas um form visual por enquanto ou adaptar depois:
     const [loading, setLoading] = useState(false)
     const [formData, setFormData] = useState({
         title: '', date: '', start_time: '', end_time: '', status: 'confirmado' as EventStatus, client_id: ''
     })
-    useEffect(() => {
-        if (!formData.client_id && clients.length > 0) {
-            setFormData(prev => ({ ...prev, client_id: clients[0].id }))
-        }
-    }, [clients, formData.client_id])
 
     const handleCreate = async () => {
-        // Exemplo simplificado (você pode melhorar para buscar clients do BD)
-        if (!formData.title || !formData.date || !formData.start_time || !formData.end_time || !formData.client_id) return
+        if (!formData.title || !formData.date || !formData.start_time || !formData.end_time ||
+            !clients.some(client => client.id === formData.client_id)) return
         setLoading(true)
         try {
-            // Nota: Para criar compromisso real, precisamos de um client_id válido.
-            // Para efeitos de UX, simularemos se não houver backend validando chave-estrangeira.
-            // Opcional: Se a API falhar sem client_id, teremos que tratar.
             await appointmentsApi.create({
                 client_id: formData.client_id,
                 date: formData.date,
@@ -166,8 +157,12 @@ function EventModal({ onClose, onSuccess, clients }: { onClose: () => void, onSu
                     </div>
 
                     <div>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Convidados / Clientes</label>
-                        <input type="text" placeholder="Adicione e-mails ou nomes" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                        <label htmlFor="event-client" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cliente *</label>
+                        <select id="event-client" value={formData.client_id} onChange={e => setFormData(prev => ({ ...prev, client_id: e.target.value }))} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--bg)', color: 'var(--text)' }}>
+                            <option value="">Selecione um cliente</option>
+                            {clients.map(client => <option key={client.id} value={client.id}>{client.full_name}</option>)}
+                        </select>
+                        {clients.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6 }}>Nenhum cliente ativo disponível para agendamento.</p>}
                     </div>
                 </div>
 
@@ -175,7 +170,7 @@ function EventModal({ onClose, onSuccess, clients }: { onClose: () => void, onSu
                     <button className="btn btn-outline" onClick={onClose} disabled={loading}>
                         Cancelar
                     </button>
-                    <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
+                    <button className="btn btn-primary" onClick={handleCreate} disabled={loading || !clients.some(client => client.id === formData.client_id)}>
                         {loading ? <Loader2 size={16} className="spin" /> : 'Criar Evento'}
                     </button>
                 </div>
