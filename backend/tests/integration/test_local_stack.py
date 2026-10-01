@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.local_guard import assert_disposable_local_target
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_LOCAL_INTEGRATION") != "1",
@@ -15,7 +16,20 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_auth_tenant_crud_and_schedule_conflict() -> None:
-    from app.database import get_supabase_admin
+    from app.config import get_settings
+
+    settings = get_settings()
+    assert_disposable_local_target(
+        settings.supabase_url,
+        run_enabled=os.getenv("RUN_LOCAL_INTEGRATION") == "1",
+        disposable_confirmed=os.getenv("PLAFIN_TEST_STACK_DISPOSABLE") == "1",
+        worker_enabled=settings.enable_notification_worker,
+    )
+    from app import database
+    # The clients used below must be created from the URL checked above.
+    database._anon_client = None
+    database._admin_client = None
+    get_supabase_admin = database.get_supabase_admin
     from app.main import app
 
     password = f"Cycle02-{uuid4().hex[:12]}"
@@ -39,8 +53,8 @@ def test_auth_tenant_crud_and_schedule_conflict() -> None:
                 )
                 assert response.status_code == 201, response.text
                 body = response.json()
-                assert body["access_token"]
                 created_user_ids.append(body["user"]["id"])
+                assert body["access_token"]
                 sessions.append(
                     {"Authorization": f"Bearer {body['access_token']}"}
                 )
