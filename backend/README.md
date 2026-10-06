@@ -38,9 +38,10 @@ python -m pytest
 
 O teste de integracao com Supabase local e opt-in e cria usuarios e dados.
 Antes de executa-lo, confirme um projeto local exclusivo e descartavel na URL
-exata `http://127.0.0.1:54321`, com worker desativado e plano de cleanup.
+exata `http://127.0.0.1:55321` da stack `plafin03b`, com worker desativado e plano de cleanup.
 Nao use stack compartilhada nem remota. O guard do teste rejeita outros destinos,
-mas nao comprova sozinho a identidade dos volumes locais.
+mas nao comprova sozinho a identidade dos volumes locais; confirme os containers
+e volumes `*_plafin03b` antes de ativar o teste.
 
 ```powershell
 $env:RUN_LOCAL_INTEGRATION='1'

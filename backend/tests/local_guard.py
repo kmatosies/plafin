@@ -20,7 +20,7 @@ def assert_disposable_local_target(
         valid = (
             target.scheme == "http"
             and target.hostname == "127.0.0.1"
-            and target.port == 54321
+            and target.port == 55321
             and target.path in ("", "/")
             and not target.username
             and not target.password
